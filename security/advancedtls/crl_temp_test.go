@@ -120,7 +120,7 @@ func TestExplore1(t *testing.T) {
 func TestExplore2(t *testing.T) {
 	// revokedInt.pem represents a certificate chain in which the second
 	// certificate is revoked in crl3 but not crl4
-	// TODO(gregorycooke) why does it choose to load crl3 and not crl4?
+	// TODO(gregorycooke) loading crl3 vs. crl4 if both are there? One is the root CA, one is the node CA
 	cache, err := lru.New(5)
 	if err != nil {
 		t.Fatalf("Creating lru cache failed")
@@ -131,8 +131,12 @@ func TestExplore2(t *testing.T) {
 	rawIssuer := certs[0].RawIssuer
 
 	// Pre-load crl4 into the cache. The cert is not revoked in crl4
+	// TODO might be cleaner to load in crl3, the remove the revoked cert in it
 	crl4 := loadCRL(t, testdata.Path("crl/4.crl"))
 	crl4.CertList.TBSCertList.NextUpdate = time.Now().Add(time.Hour)
+	// This is gross, we have added crl4 to the cache under the wrong raw issuer
+	// for crl4, but it serves the purpose of having an crl in the cache where something is not revoked
+
 	cache.Add(hex.EncodeToString(rawIssuer), crl4)
 
 	// crl, err := fetchIssuerCRL(rawIssuer, certs, RevocationConfig{RootDir: testdata.Path("crl"), Cache: cache})
@@ -144,6 +148,7 @@ func TestExplore2(t *testing.T) {
 	}
 
 	// With the current implementation, the cache will refresh if NextUpdate has passed
+	// Fake that happening (by the time is gets to the code that checks the time, time.Now will have passed)
 	crl4.CertList.TBSCertList.NextUpdate = time.Now()
 	cache.Add(hex.EncodeToString(rawIssuer), crl4)
 	revoked := false
@@ -158,4 +163,22 @@ func TestExplore2(t *testing.T) {
 		t.Fatalf("Should've gotten RevocationRevoked, did not")
 	}
 
+}
+
+func TestExplore3(t *testing.T) {
+	// Get cert that we will check
+	// 0, 1 hash to 7a1799af - 3.crl - 1 is revoked (the intermediate cert)
+	// 2 hashes to 71eac5a2a - 4.crl - none from this provider are revoked
+
+	var certs = makeChain(t, testdata.Path("crl/revokedInt.pem"))
+	for _, cert := range certs {
+		raw := cert.RawIssuer
+		var r pkix.RDNSequence
+		_, err := asn1.Unmarshal(raw, &r)
+		if err != nil {
+			t.Fatalf("asn1.Unmarshal failed %v", err)
+		}
+		hash := x509NameHash(r)
+		fmt.Println(hash)
+	}
 }

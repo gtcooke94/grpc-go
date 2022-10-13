@@ -132,6 +132,7 @@ func TestExplore2(t *testing.T) {
 
 	// Pre-load crl4 into the cache. The cert is not revoked in crl4
 	// TODO might be cleaner to load in crl3, the remove the revoked cert in it
+	// and put that in the cache so that the issuer is correct
 	crl4 := loadCRL(t, testdata.Path("crl/4.crl"))
 	crl4.CertList.TBSCertList.NextUpdate = time.Now().Add(time.Hour)
 	// This is gross, we have added crl4 to the cache under the wrong raw issuer

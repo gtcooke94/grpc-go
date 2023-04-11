@@ -19,6 +19,7 @@
 package authz
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -245,6 +246,56 @@ func TestTranslatePolicy(t *testing.T) {
 				},
 			},
 		},
+		"audit_logging": {
+			authzPolicy: `{
+				"name": "authz",
+				"allow_rules": [
+				{
+					"name": "allow_authenticated",
+					"source": {
+						"principals":["*", ""]
+					}
+				}],
+				"audit_logging_options": {
+					"audit_condition": "ON_DENY",
+					"audit_loggers": [
+						{
+							"name": "stdout_logger",
+							"config": {},
+							"is_optional": false
+						}
+					]
+				}
+			}`,
+			wantPolicies: []*v3rbacpb.RBAC{
+				{
+					Action: v3rbacpb.RBAC_ALLOW,
+					Policies: map[string]*v3rbacpb.Policy{
+						"authz_allow_authenticated": {
+							Principals: []*v3rbacpb.Principal{
+								{Identifier: &v3rbacpb.Principal_OrIds{OrIds: &v3rbacpb.Principal_Set{
+									Ids: []*v3rbacpb.Principal{
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_SafeRegex{SafeRegex: &v3matcherpb.RegexMatcher{Regex: ".+"}},
+											}},
+										}},
+										{Identifier: &v3rbacpb.Principal_Authenticated_{
+											Authenticated: &v3rbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+												MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: ""},
+											}},
+										}},
+									},
+								}}},
+							},
+							Permissions: []*v3rbacpb.Permission{
+								{Rule: &v3rbacpb.Permission_Any{Any: true}},
+							},
+						},
+					},
+				},
+			},
+		},
 		"unknown field": {
 			authzPolicy: `{"random": 123}`,
 			wantErr:     "failed to unmarshal policy",
@@ -301,6 +352,9 @@ func TestTranslatePolicy(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
+			if name == "audit_logging" {
+				fmt.Println("Test")
+			}
 			gotPolicies, gotErr := translatePolicy(test.authzPolicy)
 			if gotErr != nil && !strings.HasPrefix(gotErr.Error(), test.wantErr) {
 				t.Fatalf("unexpected error\nwant:%v\ngot:%v", test.wantErr, gotErr)

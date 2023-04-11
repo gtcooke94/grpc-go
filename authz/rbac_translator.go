@@ -53,11 +53,23 @@ type rule struct {
 	Request request
 }
 
+type auditLogger struct {
+	Name       string
+	Config     interface{}
+	IsOptional bool `json:"is_optional"`
+}
+
+type auditLoggingOptions struct {
+	AuditCondition string        `json:"audit_condition"`
+	AuditLoggers   []auditLogger `json:"audit_loggers"`
+}
+
 // Represents the SDK authorization policy provided by user.
 type authorizationPolicy struct {
-	Name       string
-	DenyRules  []rule `json:"deny_rules"`
-	AllowRules []rule `json:"allow_rules"`
+	Name                string
+	DenyRules           []rule              `json:"deny_rules"`
+	AllowRules          []rule              `json:"allow_rules"`
+	AuditLoggingOptions auditLoggingOptions `json:"audit_logging_options"`
 }
 
 func principalOr(principals []*v3rbacpb.Principal) *v3rbacpb.Principal {
@@ -266,6 +278,10 @@ func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, e
 	return policies, nil
 }
 
+func parseAuditLoggingOptions(options auditLoggingOptions) {
+
+}
+
 // translatePolicy translates SDK authorization policy in JSON format to two
 // Envoy RBAC polices (deny followed by allow policy) or only one Envoy RBAC
 // allow policy. If the input policy cannot be parsed or is invalid, an error
@@ -300,5 +316,9 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 		return nil, fmt.Errorf(`"allow_rules" %v`, err)
 	}
 	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies}
-	return append(rbacs, allowRBAC), nil
+	rbacs = append(rbacs, allowRBAC)
+	// if policy.AuditLoggingOptions != nil {
+	// 	return nil, "hey"
+	// }
+	return rbacs, nil
 }

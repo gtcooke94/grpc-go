@@ -28,9 +28,12 @@ import (
 	"fmt"
 	"strings"
 
+	// v3 "github.com/cncf/xds/go/xds/core/v3"
+	v3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
+	"google.golang.org/protobuf/types/known/anypb"
 )
 
 type header struct {
@@ -54,8 +57,9 @@ type rule struct {
 }
 
 type auditLogger struct {
-	Name       string
-	Config     interface{}
+	Name string
+	// Config     interface{}
+	Config     *anypb.Any
 	IsOptional bool `json:"is_optional"`
 }
 
@@ -278,7 +282,35 @@ func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, e
 	return policies, nil
 }
 
-func parseAuditLoggingOptions(options auditLoggingOptions) {
+func parseAuditLoggingOptions(options auditLoggingOptions) (v3rbacpb.RBAC_AuditLoggingOptions, error) {
+	optionsRbac := v3rbacpb.RBAC_AuditLoggingOptions{}
+	if options.AuditCondition == "" || len(options.AuditLoggers) == 0 {
+		// No audit logger parsed - fine
+		return optionsRbac, nil
+	}
+	switch options.AuditCondition {
+	case "NONE":
+		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY
+	case "ON_DENY":
+		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY
+	case "ON_ALLOW":
+		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW
+	case "ON_DENY_AND_ALLOW":
+		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY_AND_ALLOW
+	default:
+		return optionsRbac, fmt.Errorf("Failed to parse AuditCondition %v. Allowed values {NONE, ON_DENY, ON_ALLOW, ON_DENY_AND_ALLOW}", options.AuditCondition)
+	}
+
+	for _, config := range options.AuditLoggers {
+		logger := &v3.TypedExtensionConfig{Name: config.Name, TypedConfig: config.Config}
+		rbacConfig := v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+			IsOptional:  config.IsOptional,
+			AuditLogger: logger,
+		}
+		optionsRbac.LoggerConfigs = append(optionsRbac.LoggerConfigs, &rbacConfig)
+	}
+
+	return optionsRbac, nil
 
 }
 
@@ -299,6 +331,10 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 	if len(policy.AllowRules) == 0 {
 		return nil, fmt.Errorf(`"allow_rules" is not present`)
 	}
+	auditLoggers, err := parseAuditLoggingOptions(policy.AuditLoggingOptions)
+	if err != nil {
+		return nil, err
+	}
 	rbacs := make([]*v3rbacpb.RBAC, 0, 2)
 	if len(policy.DenyRules) > 0 {
 		denyPolicies, err := parseRules(policy.DenyRules, policy.Name)
@@ -306,8 +342,9 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 			return nil, fmt.Errorf(`"deny_rules" %v`, err)
 		}
 		denyRBAC := &v3rbacpb.RBAC{
-			Action:   v3rbacpb.RBAC_DENY,
-			Policies: denyPolicies,
+			Action:              v3rbacpb.RBAC_DENY,
+			Policies:            denyPolicies,
+			AuditLoggingOptions: &auditLoggers,
 		}
 		rbacs = append(rbacs, denyRBAC)
 	}
@@ -315,10 +352,7 @@ func translatePolicy(policyStr string) ([]*v3rbacpb.RBAC, error) {
 	if err != nil {
 		return nil, fmt.Errorf(`"allow_rules" %v`, err)
 	}
-	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies}
+	allowRBAC := &v3rbacpb.RBAC{Action: v3rbacpb.RBAC_ALLOW, Policies: allowPolicies, AuditLoggingOptions: &auditLoggers}
 	rbacs = append(rbacs, allowRBAC)
-	// if policy.AuditLoggingOptions != nil {
-	// 	return nil, "hey"
-	// }
 	return rbacs, nil
 }

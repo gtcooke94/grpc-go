@@ -34,6 +34,7 @@ import (
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"google.golang.org/protobuf/types/known/anypb"
+	"google.golang.org/protobuf/types/known/structpb"
 )
 
 type header struct {
@@ -59,7 +60,16 @@ type rule struct {
 type auditLogger struct {
 	Name string
 	// Config     interface{}
-	Config     *anypb.Any
+	// Need custom marshaler for this particular structure, with custom decoder
+	// Do this by implementing UnmarshalJSON
+	// How to convert to protoany?
+	// google.protobuf.struct
+	// Anypb.new needs a pb struct inside, will use google.protobuf.struct as a dynamic thing
+	// Config *anypb.Any
+	// Config     string
+	// Config google.protobuf.Struct
+	// Config     []byte
+	Config     structpb.Struct
 	IsOptional bool `json:"is_optional"`
 }
 
@@ -284,13 +294,18 @@ func parseRules(rules []rule, prefixName string) (map[string]*v3rbacpb.Policy, e
 
 func parseAuditLoggingOptions(options auditLoggingOptions) (v3rbacpb.RBAC_AuditLoggingOptions, error) {
 	optionsRbac := v3rbacpb.RBAC_AuditLoggingOptions{}
-	if options.AuditCondition == "" || len(options.AuditLoggers) == 0 {
+	if options.AuditCondition == "" && len(options.AuditLoggers) == 0 {
 		// No audit logger parsed - fine
 		return optionsRbac, nil
+	} else if options.AuditCondition == "" {
+		return optionsRbac, fmt.Errorf("AuditLogger config present but missing AuditCondition")
+	} else if len(options.AuditLoggers) == 0 {
+		return optionsRbac, fmt.Errorf("AuditCondition present but missing AuditLogger config")
 	}
+
 	switch options.AuditCondition {
 	case "NONE":
-		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY
+		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_NONE
 	case "ON_DENY":
 		optionsRbac.AuditCondition = v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY
 	case "ON_ALLOW":
@@ -302,7 +317,11 @@ func parseAuditLoggingOptions(options auditLoggingOptions) (v3rbacpb.RBAC_AuditL
 	}
 
 	for _, config := range options.AuditLoggers {
-		logger := &v3.TypedExtensionConfig{Name: config.Name, TypedConfig: config.Config}
+		customConfig, err := anypb.New(&config.Config)
+		if err != nil {
+			return optionsRbac, fmt.Errorf("Error parsing custom audit logger config: %v", err)
+		}
+		logger := &v3.TypedExtensionConfig{Name: config.Name, TypedConfig: customConfig}
 		rbacConfig := v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
 			IsOptional:  config.IsOptional,
 			AuditLogger: logger,
@@ -312,6 +331,10 @@ func parseAuditLoggingOptions(options auditLoggingOptions) (v3rbacpb.RBAC_AuditL
 
 	return optionsRbac, nil
 
+}
+
+func parseAuditLoggingCustomConfig(rawConfig []byte) anypb.Any {
+	return anypb.Any{}
 }
 
 // translatePolicy translates SDK authorization policy in JSON format to two

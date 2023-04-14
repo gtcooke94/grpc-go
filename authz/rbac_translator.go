@@ -28,7 +28,6 @@ import (
 	"fmt"
 	"strings"
 
-	// v3 "github.com/cncf/xds/go/xds/core/v3"
 	v3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
@@ -58,17 +57,7 @@ type rule struct {
 }
 
 type auditLogger struct {
-	Name string
-	// Config     interface{}
-	// Need custom marshaler for this particular structure, with custom decoder
-	// Do this by implementing UnmarshalJSON
-	// How to convert to protoany?
-	// google.protobuf.struct
-	// Anypb.new needs a pb struct inside, will use google.protobuf.struct as a dynamic thing
-	// Config *anypb.Any
-	// Config     string
-	// Config google.protobuf.Struct
-	// Config     []byte
+	Name       string
 	Config     structpb.Struct
 	IsOptional bool `json:"is_optional"`
 }
@@ -331,10 +320,6 @@ func parseAuditLoggingOptions(options auditLoggingOptions) (v3rbacpb.RBAC_AuditL
 
 	return optionsRbac, nil
 
-}
-
-func parseAuditLoggingCustomConfig(rawConfig []byte) anypb.Any {
-	return anypb.Any{}
 }
 
 // translatePolicy translates SDK authorization policy in JSON format to two

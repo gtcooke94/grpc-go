@@ -19,7 +19,6 @@
 package authz
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -739,9 +738,6 @@ func TestTranslatePolicy(t *testing.T) {
 	}
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			if name == "audit logging bad" {
-				fmt.Println("audit logging bad")
-			}
 			gotPolicies, gotErr := translatePolicy(test.authzPolicy)
 			if gotErr != nil && !strings.HasPrefix(gotErr.Error(), test.wantErr) {
 				t.Fatalf("unexpected error\nwant:%v\ngot:%v", test.wantErr, gotErr)

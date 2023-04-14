@@ -301,7 +301,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: nil},
+							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(map[string]interface{}{})},
 								IsOptional: false,
 							},
 						},
@@ -359,7 +359,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: &anypb.Any{}},
+							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(map[string]interface{}{})},
 								IsOptional: false,
 							},
 						},
@@ -417,7 +417,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_ON_DENY_AND_ALLOW,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: &anypb.Any{}},
+							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(map[string]interface{}{})},
 								IsOptional: false,
 							},
 						},
@@ -475,7 +475,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: &anypb.Any{}},
+							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(map[string]interface{}{})},
 								IsOptional: false,
 							},
 						},
@@ -533,7 +533,6 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							// {AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(structpb.Struct{"abc": 123})},
 							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(map[string]interface{}{"abc": 123, "xyz": "123"})},
 								IsOptional: false,
 							},
@@ -592,7 +591,7 @@ func TestTranslatePolicy(t *testing.T) {
 					AuditLoggingOptions: &v3rbacpb.RBAC_AuditLoggingOptions{
 						AuditCondition: v3rbacpb.RBAC_AuditLoggingOptions_NONE,
 						LoggerConfigs: []*v3rbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(map[string]interface{}{"TODO": 123})},
+							{AuditLogger: &v3.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: anyPbHelper(map[string]interface{}{"abc": 123, "xyz": map[string]interface{}{"abc": 123}})},
 								IsOptional: false,
 							},
 						},

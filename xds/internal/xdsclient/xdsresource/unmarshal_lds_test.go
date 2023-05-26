@@ -26,6 +26,7 @@ import (
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
+	"google.golang.org/grpc/authz/audit/stdout"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
@@ -852,6 +853,48 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			},
 		})
 
+		stdoutAuditLoggerHttpFilters = []*v3httppb.HttpFilter{
+			{
+				Name: "TODO",
+				ConfigType: &v3httppb.HttpFilter_TypedConfig{
+					TypedConfig: testutils.MarshalAny(&v3rbacpb.RBAC{
+						Rules: &v3baserbacpb.RBAC{
+							Action: v3baserbacpb.RBAC_DENY,
+
+							Policies: map[string]*v3baserbacpb.Policy{
+								"authz_deny_policy_1": {
+									Principals: []*v3baserbacpb.Principal{
+										{Identifier: &v3baserbacpb.Principal_OrIds{OrIds: &v3baserbacpb.Principal_Set{
+											Ids: []*v3baserbacpb.Principal{
+												{Identifier: &v3baserbacpb.Principal_Authenticated_{
+													Authenticated: &v3baserbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+														MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "spiffe://foo.abc"},
+													}},
+												}},
+											},
+										}}},
+									},
+									Permissions: []*v3baserbacpb.Permission{
+										{Rule: &v3baserbacpb.Permission_Any{Any: true}},
+									},
+								},
+							},
+							AuditLoggingOptions: &v3baserbacpb.RBAC_AuditLoggingOptions{
+								AuditCondition: v3baserbacpb.RBAC_AuditLoggingOptions_ON_DENY,
+								LoggerConfigs: []*v3baserbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+									{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: testutils.MarshalAny(&v3auditloggersstreampb.StdoutAuditLog{})},
+										IsOptional: false,
+									},
+								},
+							},
+						},
+					}),
+				},
+				IsOptional: true,
+			},
+			e2e.RouterHTTPFilter,
+		}
+
 		v3RbacWithStdoutAuditLogger = testutils.MarshalAny(&v3listenerpb.Listener{
 			Name:    "TODO",
 			Address: localSocketAddress,
@@ -866,55 +909,19 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
 										RouteConfig: routeConfig,
 									},
-									HttpFilters: []*v3httppb.HttpFilter{
-										{
-											Name: "TODO",
-											ConfigType: &v3httppb.HttpFilter_TypedConfig{
-												TypedConfig: testutils.MarshalAny(&v3rbacpb.RBAC{
-													Rules: &v3baserbacpb.RBAC{
-														Action: v3baserbacpb.RBAC_DENY,
-
-														Policies: map[string]*v3baserbacpb.Policy{
-															"authz_deny_policy_1": {
-																Principals: []*v3baserbacpb.Principal{
-																	{Identifier: &v3baserbacpb.Principal_OrIds{OrIds: &v3baserbacpb.Principal_Set{
-																		Ids: []*v3baserbacpb.Principal{
-																			{Identifier: &v3baserbacpb.Principal_Authenticated_{
-																				Authenticated: &v3baserbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
-																					MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "spiffe://foo.abc"},
-																				}},
-																			}},
-																		},
-																	}}},
-																},
-																Permissions: []*v3baserbacpb.Permission{
-																	{Rule: &v3baserbacpb.Permission_Any{Any: true}},
-																},
-															},
-														},
-														AuditLoggingOptions: &v3baserbacpb.RBAC_AuditLoggingOptions{
-															AuditCondition: v3baserbacpb.RBAC_AuditLoggingOptions_ON_DENY,
-															LoggerConfigs: []*v3baserbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-																{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: testutils.MarshalAny(&v3auditloggersstreampb.StdoutAuditLog{})},
-																	IsOptional: false,
-																},
-															},
-														},
-													},
-												}),
-											},
-											IsOptional: true,
-										},
-										e2e.RouterHTTPFilter,
-									},
+									HttpFilters: stdoutAuditLoggerHttpFilters,
 								}),
 							},
 						},
-						// emptyValidNetworkFilters[0],
 					},
 				},
 			},
 		})
+
+		stdoutBuilder    = httpfilter.Get(stdout.Name)
+		stdoutConfig, _  = stdoutBuilder.ParseFilterConfig(&anypb.Any{})
+		stdoutFilter     = HTTPFilter{Name: stdout.Name, Filter: stdoutBuilder, Config: stdoutConfig}
+		stdoutFilterList = []HTTPFilter{stdoutFilter, routerFilter}
 	)
 	v3LisToTestRBAC := func(xffNumTrustedHops uint32, originalIpDetectionExtensions []*v3corepb.TypedExtensionConfig) *anypb.Any {
 		return testutils.MarshalAny(&v3listenerpb.Listener{
@@ -1771,6 +1778,44 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			name:     "rbac-with-stdout-audit-logger",
 			resource: v3RbacWithStdoutAuditLogger,
 			wantName: "TODO",
+			wantUpdate: ListenerUpdate{
+				InboundListenerCfg: &InboundListenerConfig{
+					Address: "0.0.0.0",
+					Port:    "9999",
+					FilterChains: &FilterChainManager{
+						dstPrefixMap: map[string]*destPrefixEntry{
+							unspecifiedPrefixMapKey: {
+								srcTypeArr: [3]*sourcePrefixes{
+									{
+										srcPrefixMap: map[string]*sourcePrefixEntry{
+											unspecifiedPrefixMapKey: {
+												srcPortMap: map[int]*FilterChain{
+													0: {
+														InlineRouteConfig: inlineRouteConfig,
+														HTTPFilters:       stdoutFilterList,
+													},
+												},
+											},
+										},
+									},
+								},
+							},
+						},
+						def: &FilterChain{
+							SecurityCfg: &SecurityConfig{
+								RootInstanceName:     "defaultRootPluginInstance",
+								RootCertName:         "defaultRootCertName",
+								IdentityInstanceName: "defaultIdentityPluginInstance",
+								IdentityCertName:     "defaultIdentityCertName",
+								RequireClientCert:    true,
+							},
+							InlineRouteConfig: inlineRouteConfig,
+							HTTPFilters:       routerFilterList,
+						},
+					},
+				},
+				Raw: listenerWithValidationContextNewFields,
+			},
 		},
 	}
 

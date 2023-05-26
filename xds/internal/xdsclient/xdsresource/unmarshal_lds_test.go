@@ -39,9 +39,11 @@ import (
 	v3corepb "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	v3listenerpb "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	rpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
+	v3baserbacpb "github.com/envoyproxy/go-control-plane/envoy/config/rbac/v3"
 	v3routepb "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	v3rbacpb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/rbac/v3"
 	v3httppb "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
+	v3auditloggersstreampb "github.com/envoyproxy/go-control-plane/envoy/extensions/rbac/audit_loggers/stream/v3"
 	v3tlspb "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	v3discoverypb "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
 	v3matcherpb "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
@@ -845,6 +847,67 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 								},
 							},
 						}),
+					},
+				},
+			},
+		})
+
+		v3RbacWithStdoutAuditLogger = testutils.MarshalAny(&v3listenerpb.Listener{
+			Name: "TODO",
+			FilterChains: []*v3listenerpb.FilterChain{
+				{
+					Name: "filter-chain-1",
+					Filters: []*v3listenerpb.Filter{
+						{
+							Name: "filter-1",
+							ConfigType: &v3listenerpb.Filter_TypedConfig{
+								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
+									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
+										RouteConfig: routeConfig,
+									},
+									HttpFilters: []*v3httppb.HttpFilter{
+										{
+											Name: "TODO",
+											ConfigType: &v3httppb.HttpFilter_TypedConfig{
+												TypedConfig: testutils.MarshalAny(&v3rbacpb.RBAC{
+													Rules: &v3baserbacpb.RBAC{
+														Action: v3baserbacpb.RBAC_DENY,
+
+														Policies: map[string]*v3baserbacpb.Policy{
+															"authz_deny_policy_1": {
+																Principals: []*v3baserbacpb.Principal{
+																	{Identifier: &v3baserbacpb.Principal_OrIds{OrIds: &v3baserbacpb.Principal_Set{
+																		Ids: []*v3baserbacpb.Principal{
+																			{Identifier: &v3baserbacpb.Principal_Authenticated_{
+																				Authenticated: &v3baserbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+																					MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "spiffe://foo.abc"},
+																				}},
+																			}},
+																		},
+																	}}},
+																},
+																Permissions: []*v3baserbacpb.Permission{
+																	{Rule: &v3baserbacpb.Permission_Any{Any: true}},
+																},
+															},
+														},
+														AuditLoggingOptions: &v3baserbacpb.RBAC_AuditLoggingOptions{
+															AuditCondition: v3baserbacpb.RBAC_AuditLoggingOptions_ON_DENY,
+															LoggerConfigs: []*v3baserbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+																{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: testutils.MarshalAny(&v3auditloggersstreampb.StdoutAuditLog{})},
+																	IsOptional: false,
+																},
+															},
+														},
+													},
+												}),
+											},
+											IsOptional: true,
+										},
+									},
+								}),
+							},
+						},
 					},
 				},
 			},
@@ -1700,6 +1763,11 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 				Raw: listenerWithValidationContextNewFields,
 			},
+		},
+		{
+			name:     "rbac-with-stdout-audit-logger",
+			resource: v3RbacWithStdoutAuditLogger,
+			wantName: "TODO",
 		},
 	}
 

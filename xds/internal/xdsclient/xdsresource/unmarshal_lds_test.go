@@ -26,7 +26,6 @@ import (
 	v2xdspb "github.com/envoyproxy/go-control-plane/envoy/api/v2"
 	"github.com/golang/protobuf/proto"
 	"github.com/google/go-cmp/cmp"
-	"google.golang.org/grpc/authz/audit/stdout"
 	"google.golang.org/grpc/internal/envconfig"
 	"google.golang.org/grpc/internal/pretty"
 	"google.golang.org/grpc/internal/testutils"
@@ -918,10 +917,10 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			},
 		})
 
-		stdoutBuilder    = httpfilter.Get(stdout.Name)
-		stdoutConfig, _  = stdoutBuilder.ParseFilterConfig(&anypb.Any{})
-		stdoutFilter     = HTTPFilter{Name: stdout.Name, Filter: stdoutBuilder, Config: stdoutConfig}
-		stdoutFilterList = []HTTPFilter{stdoutFilter, routerFilter}
+		rbacBuilder    = httpfilter.Get("type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC")
+		rbacConfig, _  = rbacBuilder.ParseFilterConfig(&anypb.Any{})
+		rbacFilter     = HTTPFilter{Name: "rbac", Filter: rbacBuilder, Config: rbacConfig}
+		rbacFilterList = []HTTPFilter{rbacFilter, routerFilter}
 	)
 	v3LisToTestRBAC := func(xffNumTrustedHops uint32, originalIpDetectionExtensions []*v3corepb.TypedExtensionConfig) *anypb.Any {
 		return testutils.MarshalAny(&v3listenerpb.Listener{
@@ -1792,27 +1791,70 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 												srcPortMap: map[int]*FilterChain{
 													0: {
 														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       stdoutFilterList,
+														HTTPFilters:       rbacFilterList,
 													},
 												},
 											},
 										},
+										srcPrefixes: []*sourcePrefixEntry{{
+											srcPortMap: map[int]*FilterChain{
+												0: {
+													InlineRouteConfig: inlineRouteConfig,
+													HTTPFilters:       rbacFilterList,
+												},
+											},
+										}},
 									},
 								},
 							},
 						},
-						def: &FilterChain{
-							SecurityCfg: &SecurityConfig{
-								RootInstanceName:     "defaultRootPluginInstance",
-								RootCertName:         "defaultRootCertName",
-								IdentityInstanceName: "defaultIdentityPluginInstance",
-								IdentityCertName:     "defaultIdentityCertName",
-								RequireClientCert:    true,
+						dstPrefixes: []*destPrefixEntry{
+							{
+								srcTypeArr: [3]*sourcePrefixes{
+									{
+										srcPrefixMap: map[string]*sourcePrefixEntry{
+											unspecifiedPrefixMapKey: {
+												srcPortMap: map[int]*FilterChain{
+													0: {
+														InlineRouteConfig: inlineRouteConfig,
+														HTTPFilters:       rbacFilterList,
+													},
+												},
+											},
+										},
+										srcPrefixes: []*sourcePrefixEntry{{
+											srcPortMap: map[int]*FilterChain{
+												0: {
+													InlineRouteConfig: inlineRouteConfig,
+													HTTPFilters:       rbacFilterList,
+												},
+											},
+										}},
+									},
+								},
 							},
-							InlineRouteConfig: inlineRouteConfig,
-							HTTPFilters:       routerFilterList,
 						},
 					},
+					// FilterChains: &FilterChainManager{
+					// 	dstPrefixMap: map[string]*destPrefixEntry{
+					// 		unspecifiedPrefixMapKey: {
+					// 			srcTypeArr: [3]*sourcePrefixes{
+					// 				{
+					// 					srcPrefixMap: map[string]*sourcePrefixEntry{
+					// 						unspecifiedPrefixMapKey: {
+					// 							srcPortMap: map[int]*FilterChain{
+					// 								0: {
+					// 									InlineRouteConfig: inlineRouteConfig,
+					// 									HTTPFilters:       rbacFilterList,
+					// 								},
+					// 							},
+					// 						},
+					// 					},
+					// 				},
+					// 			},
+					// 		},
+					// 	},
+					// },
 				},
 				Raw: listenerWithValidationContextNewFields,
 			},
@@ -1831,7 +1873,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				t.Errorf("unmarshalListenerResource(%s), got name: %s, want: %s", pretty.ToJSON(test.resource), name, test.wantName)
 			}
 			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
-				t.Errorf(pretty.ToJSON(update))
+				// t.Errorf(pretty.ToJSON(update))
 				t.Errorf("unmarshalListenerResource(%s), got unexpected update, diff (-got +want): %v", pretty.ToJSON(test.resource), diff)
 			}
 		})

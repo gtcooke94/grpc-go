@@ -853,13 +853,14 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 		})
 
 		v3RbacWithStdoutAuditLogger = testutils.MarshalAny(&v3listenerpb.Listener{
-			Name: "TODO",
+			Name:    "TODO",
+			Address: localSocketAddress,
 			FilterChains: []*v3listenerpb.FilterChain{
 				{
 					Name: "filter-chain-1",
 					Filters: []*v3listenerpb.Filter{
 						{
-							Name: "filter-1",
+							Name: "filter-stdoutlogger",
 							ConfigType: &v3listenerpb.Filter_TypedConfig{
 								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
 									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
@@ -904,10 +905,12 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 											},
 											IsOptional: true,
 										},
+										e2e.RouterHTTPFilter,
 									},
 								}),
 							},
 						},
+						// emptyValidNetworkFilters[0],
 					},
 				},
 			},
@@ -1774,6 +1777,8 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			name, update, err := unmarshalListenerResource(test.resource)
+			// update.InboundListenerCfg.FilterChains.dstPrefixes.srcTypeArr[0].srcPrefixMap["unspecified"].srcPortMap[0].HTTPFilters
+			// filters := update.InboundListenerCfg.FilterChains.dstPrefixes[0].srcTypeArr[0].srcPrefixMap["unspecified"].srcPortMap[0].HTTPFilters
 			if err != nil && !strings.Contains(err.Error(), test.wantErr) {
 				t.Errorf("unmarshalListenerResource(%s) = %v wantErr: %q", pretty.ToJSON(test.resource), err, test.wantErr)
 			}
@@ -1781,6 +1786,7 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				t.Errorf("unmarshalListenerResource(%s), got name: %s, want: %s", pretty.ToJSON(test.resource), name, test.wantName)
 			}
 			if diff := cmp.Diff(update, test.wantUpdate, cmpOpts); diff != "" {
+				t.Errorf(pretty.ToJSON(update))
 				t.Errorf("unmarshalListenerResource(%s), got unexpected update, diff (-got +want): %v", pretty.ToJSON(test.resource), diff)
 			}
 		})

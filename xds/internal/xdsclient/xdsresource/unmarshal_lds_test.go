@@ -52,7 +52,6 @@ import (
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 
 	"google.golang.org/grpc/xds/internal/httpfilter/rbac"
-	_ "google.golang.org/grpc/xds/internal/httpfilter/rbac"   // Register the RBAC HTTP filter.
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
 )
 
@@ -852,76 +851,6 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 				},
 			},
 		})
-
-		stdoutAuditLoggerHttpFilters = []*v3httppb.HttpFilter{
-			{
-				Name: "TODO",
-				ConfigType: &v3httppb.HttpFilter_TypedConfig{
-					TypedConfig: testutils.MarshalAny(&v3rbacpb.RBAC{
-						Rules: &v3baserbacpb.RBAC{
-							Action: v3baserbacpb.RBAC_DENY,
-
-							Policies: map[string]*v3baserbacpb.Policy{
-								"authz_deny_policy_1": {
-									Principals: []*v3baserbacpb.Principal{
-										{Identifier: &v3baserbacpb.Principal_OrIds{OrIds: &v3baserbacpb.Principal_Set{
-											Ids: []*v3baserbacpb.Principal{
-												{Identifier: &v3baserbacpb.Principal_Authenticated_{
-													Authenticated: &v3baserbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
-														MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "spiffe://foo.abc"},
-													}},
-												}},
-											},
-										}}},
-									},
-									Permissions: []*v3baserbacpb.Permission{
-										{Rule: &v3baserbacpb.Permission_Any{Any: true}},
-									},
-								},
-							},
-							AuditLoggingOptions: &v3baserbacpb.RBAC_AuditLoggingOptions{
-								AuditCondition: v3baserbacpb.RBAC_AuditLoggingOptions_ON_DENY,
-								LoggerConfigs: []*v3baserbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
-									{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: testutils.MarshalAny(&v3auditloggersstreampb.StdoutAuditLog{})},
-										IsOptional: false,
-									},
-								},
-							},
-						},
-					}),
-				},
-				IsOptional: true,
-			},
-			e2e.RouterHTTPFilter,
-		}
-
-		v3RbacWithStdoutAuditLogger = testutils.MarshalAny(&v3listenerpb.Listener{
-			Name:    "TODO",
-			Address: localSocketAddress,
-			FilterChains: []*v3listenerpb.FilterChain{
-				{
-					Name: "filter-chain-1",
-					Filters: []*v3listenerpb.Filter{
-						{
-							Name: "filter-stdoutlogger",
-							ConfigType: &v3listenerpb.Filter_TypedConfig{
-								TypedConfig: testutils.MarshalAny(&v3httppb.HttpConnectionManager{
-									RouteSpecifier: &v3httppb.HttpConnectionManager_RouteConfig{
-										RouteConfig: routeConfig,
-									},
-									HttpFilters: stdoutAuditLoggerHttpFilters,
-								}),
-							},
-						},
-					},
-				},
-			},
-		})
-
-		rbacBuilder    = httpfilter.Get("type.googleapis.com/envoy.extensions.filters.http.rbac.v3.RBAC")
-		rbacConfig, _  = rbacBuilder.ParseFilterConfig(&anypb.Any{})
-		rbacFilter     = HTTPFilter{Name: "rbac", Filter: rbacBuilder, Config: rbacConfig}
-		rbacFilterList = []HTTPFilter{rbacFilter, routerFilter}
 	)
 	v3LisToTestRBAC := func(xffNumTrustedHops uint32, originalIpDetectionExtensions []*v3corepb.TypedExtensionConfig) *anypb.Any {
 		return testutils.MarshalAny(&v3listenerpb.Listener{
@@ -1770,92 +1699,6 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 							HTTPFilters:       routerFilterList,
 						},
 					},
-				},
-				Raw: listenerWithValidationContextNewFields,
-			},
-		},
-		{
-			name:     "rbac-with-stdout-audit-logger",
-			resource: v3RbacWithStdoutAuditLogger,
-			wantName: "TODO",
-			wantUpdate: ListenerUpdate{
-				InboundListenerCfg: &InboundListenerConfig{
-					Address: "0.0.0.0",
-					Port:    "9999",
-					FilterChains: &FilterChainManager{
-						dstPrefixMap: map[string]*destPrefixEntry{
-							unspecifiedPrefixMapKey: {
-								srcTypeArr: [3]*sourcePrefixes{
-									{
-										srcPrefixMap: map[string]*sourcePrefixEntry{
-											unspecifiedPrefixMapKey: {
-												srcPortMap: map[int]*FilterChain{
-													0: {
-														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       rbacFilterList,
-													},
-												},
-											},
-										},
-										srcPrefixes: []*sourcePrefixEntry{{
-											srcPortMap: map[int]*FilterChain{
-												0: {
-													InlineRouteConfig: inlineRouteConfig,
-													HTTPFilters:       rbacFilterList,
-												},
-											},
-										}},
-									},
-								},
-							},
-						},
-						dstPrefixes: []*destPrefixEntry{
-							{
-								srcTypeArr: [3]*sourcePrefixes{
-									{
-										srcPrefixMap: map[string]*sourcePrefixEntry{
-											unspecifiedPrefixMapKey: {
-												srcPortMap: map[int]*FilterChain{
-													0: {
-														InlineRouteConfig: inlineRouteConfig,
-														HTTPFilters:       rbacFilterList,
-													},
-												},
-											},
-										},
-										srcPrefixes: []*sourcePrefixEntry{{
-											srcPortMap: map[int]*FilterChain{
-												0: {
-													InlineRouteConfig: inlineRouteConfig,
-													HTTPFilters:       rbacFilterList,
-												},
-											},
-										}},
-									},
-								},
-							},
-						},
-					},
-					// FilterChains: &FilterChainManager{
-					// 	dstPrefixMap: map[string]*destPrefixEntry{
-					// 		unspecifiedPrefixMapKey: {
-					// 			srcTypeArr: [3]*sourcePrefixes{
-					// 				{
-					// 					srcPrefixMap: map[string]*sourcePrefixEntry{
-					// 						unspecifiedPrefixMapKey: {
-					// 							srcPortMap: map[int]*FilterChain{
-					// 								0: {
-					// 									InlineRouteConfig: inlineRouteConfig,
-					// 									HTTPFilters:       rbacFilterList,
-					// 								},
-					// 							},
-					// 						},
-					// 					},
-					// 				},
-					// 			},
-					// 		},
-					// 	},
-					// },
 				},
 				Raw: listenerWithValidationContextNewFields,
 			},

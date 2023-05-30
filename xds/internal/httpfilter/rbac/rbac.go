@@ -127,9 +127,6 @@ func parseConfig(rbacCfg *rpb.RBAC, filterName string) (httpfilter.FilterConfig,
 		return config{}, nil
 	}
 
-	// TODO(gregorycooke) - change the call chain to here so we have the filter
-	// name to input here instead of an empty string. It will come from here:
-	// https://github.com/grpc/grpc-go/blob/eff0942e95d93112921414aee758e619ec86f26f/xds/internal/xdsclient/xdsresource/unmarshal_lds.go#L199
 	ce, err := rbac.NewChainEngine([]*v3rbacpb.RBAC{rbacCfg.GetRules()}, filterName)
 	if err != nil {
 		// "At this time, if the RBAC.action is Action.LOG then the policy will be

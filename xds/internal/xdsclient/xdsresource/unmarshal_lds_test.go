@@ -51,6 +51,7 @@ import (
 	spb "github.com/golang/protobuf/ptypes/struct"
 	wrapperspb "github.com/golang/protobuf/ptypes/wrappers"
 
+	"google.golang.org/grpc/xds/internal/httpfilter/rbac"
 	_ "google.golang.org/grpc/xds/internal/httpfilter/rbac"   // Register the RBAC HTTP filter.
 	_ "google.golang.org/grpc/xds/internal/httpfilter/router" // Register the router filter.
 )
@@ -1878,6 +1879,63 @@ func (s) TestUnmarshalListener_ServerSide(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestRbacNamePassthrough(t *testing.T) {
+	filters := []*v3httppb.HttpFilter{
+		{
+			Name: "StdoutAuditLogger",
+			ConfigType: &v3httppb.HttpFilter_TypedConfig{
+				TypedConfig: testutils.MarshalAny(&v3rbacpb.RBAC{
+					Rules: &v3baserbacpb.RBAC{
+						Action: v3baserbacpb.RBAC_DENY,
+
+						Policies: map[string]*v3baserbacpb.Policy{
+							"authz_deny_policy_1": {
+								Principals: []*v3baserbacpb.Principal{
+									{Identifier: &v3baserbacpb.Principal_OrIds{OrIds: &v3baserbacpb.Principal_Set{
+										Ids: []*v3baserbacpb.Principal{
+											{Identifier: &v3baserbacpb.Principal_Authenticated_{
+												Authenticated: &v3baserbacpb.Principal_Authenticated{PrincipalName: &v3matcherpb.StringMatcher{
+													MatchPattern: &v3matcherpb.StringMatcher_Exact{Exact: "spiffe://foo.abc"},
+												}},
+											}},
+										},
+									}}},
+								},
+								Permissions: []*v3baserbacpb.Permission{
+									{Rule: &v3baserbacpb.Permission_Any{Any: true}},
+								},
+							},
+						},
+						AuditLoggingOptions: &v3baserbacpb.RBAC_AuditLoggingOptions{
+							AuditCondition: v3baserbacpb.RBAC_AuditLoggingOptions_ON_DENY,
+							LoggerConfigs: []*v3baserbacpb.RBAC_AuditLoggingOptions_AuditLoggerConfig{
+								{AuditLogger: &v3corepb.TypedExtensionConfig{Name: "stdout_logger", TypedConfig: testutils.MarshalAny(&v3auditloggersstreampb.StdoutAuditLog{})},
+									IsOptional: false,
+								},
+							},
+						},
+					},
+				}),
+			},
+			IsOptional: true,
+		},
+		// This filter acts as a terminal filter at the end of the filter chain.
+		e2e.RouterHTTPFilter,
+	}
+	res, err := processHTTPFilters(filters, true)
+	if err != nil {
+		t.Fatalf("processHTTPFilters errors: %v", err)
+	}
+	stdoutFilter, ok := res[0].Filter.(rbac.Builder)
+	if !ok {
+		t.Fatalf("Expected res[0].Filter to be of type rbac.Builder but was not")
+	}
+	if stdoutFilter.Name != "StdoutAuditLogger" {
+		t.Fatalf("Expected filter name to be StdoutAuditLogger but was not")
+	}
+
 }
 
 type filterConfig struct {

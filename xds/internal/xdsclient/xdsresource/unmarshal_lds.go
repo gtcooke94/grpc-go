@@ -155,6 +155,7 @@ func validateHTTPFilterConfig(cfg *anypb.Any, lds, optional bool, name string) (
 	}
 	if rbac, ok := filterBuilder.(rbac.Builder); ok {
 		rbac.Name = name
+		filterBuilder = rbac
 	}
 	parseFunc := filterBuilder.ParseFilterConfig
 	if !lds {

@@ -415,19 +415,6 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 }
 
 func getRootsFromSPIFFEBundleMap(connectionInfo *ConnectionInfo, bundleMap credinternal.SPIFFEBundleMap) (*RootCertificates, error) {
-	// When performing SPIFFE verification, the following steps will be performed:
-
-	// 1. Upon receiving a peer certificate, verify that it is a well-formed SPIFFE
-	//    leaf certificate.  In particular, it must have a single URI SAN containing
-	//    a well-formed SPIFFE ID ([SPIFFE ID format]).
-
-	// 2. Use the trust domain in the peer certificate's SPIFFE ID to lookup
-	//    the SPIFFE trust bundle. If the trust domain is not contained in the
-	//    configured trust map, reject the certificate.
-
-	// 3. Verify the peer certificate using the default security library using
-	//    the SPIFFE trust bundle certificates as roots.
-	// TODO(gregorycooke) - here
 	if len(connectionInfo.RawCerts) == 0 {
 		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap(%v, %v) had empty connectionInfo.RawCerts. Need certificate chain to lookup roots.")
 	}
@@ -436,7 +423,17 @@ func getRootsFromSPIFFEBundleMap(connectionInfo *ConnectionInfo, bundleMap credi
 		return nil, err
 
 	}
+	// 1. Upon receiving a peer certificate, verify that it is a well-formed SPIFFE
+	//    leaf certificate.  In particular, it must have a single URI SAN containing
+	//    a well-formed SPIFFE ID ([SPIFFE ID format]).
 	spiffeId := credinternal.SPIFFEIDFromCert(leafCert)
+	if spiffeId == nil {
+		return nil, fmt.Errorf("credinternal.SPIFFEIDFromCert(leafCert) = nil, failed to parse a SPIFFE id")
+	}
+
+	// 2. Use the trust domain in the peer certificate's SPIFFE ID to lookup
+	//    the SPIFFE trust bundle. If the trust domain is not contained in the
+	//    configured trust map, reject the certificate.
 	spiffeBundle := bundleMap[spiffeId.Host]
 	roots := spiffeBundle.X509Authorities()
 	rootPool := x509.NewCertPool()

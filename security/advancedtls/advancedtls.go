@@ -38,7 +38,6 @@ import (
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
-	"google.golang.org/grpc/credentials/tls/certprovider/spiffe"
 	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
@@ -279,8 +278,8 @@ func (o *Options) clientConfig() (*tls.Config, error) {
 			if err != nil {
 				return nil, err
 			}
-			if km.SpiffeBundleMap != nil {
-				getRootsFromSpiffeBundleMap(connectionInfo, km)
+			if km.SPIFFEBundleMap != nil {
+				return getRootsFromSPIFFEBundleMap(connectionInfo, km)
 
 			} else {
 				return &RootCertificates{TrustCerts: km.Roots}, nil
@@ -415,7 +414,7 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 	return config, nil
 }
 
-func getRootsFromSpiffeBundleMap(connectionInfo *ConnectionInfo, bundleMap spiffe.SpiffeBundleMap) {
+func getRootsFromSPIFFEBundleMap(connectionInfo *ConnectionInfo, bundleMap credinternal.SPIFFEBundleMap) (*RootCertificates, error) {
 	// When performing SPIFFE verification, the following steps will be performed:
 
 	// 1. Upon receiving a peer certificate, verify that it is a well-formed SPIFFE
@@ -429,9 +428,22 @@ func getRootsFromSpiffeBundleMap(connectionInfo *ConnectionInfo, bundleMap spiff
 	// 3. Verify the peer certificate using the default security library using
 	//    the SPIFFE trust bundle certificates as roots.
 	// TODO(gregorycooke) - here
-	leafCert := connectionInfo.RawCerts[0]
-	spiffeId := credinternal.SPIFFEIDFromCert(connectionInfo.RawCerts[0][0])
+	if len(connectionInfo.RawCerts) == 0 {
+		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap(%v, %v) had empty connectionInfo.RawCerts. Need certificate chain to lookup roots.")
+	}
+	leafCert, err := x509.ParseCertificate(connectionInfo.RawCerts[0])
+	if err != nil {
+		return nil, err
 
+	}
+	spiffeId := credinternal.SPIFFEIDFromCert(leafCert)
+	spiffeBundle := bundleMap[spiffeId.Host]
+	roots := spiffeBundle.X509Authorities()
+	rootPool := x509.NewCertPool()
+	for _, root := range roots {
+		rootPool.AddCert(root)
+	}
+	return &RootCertificates{TrustCerts: rootPool}, err
 }
 
 // advancedTLSCreds is the credentials required for authenticating a connection

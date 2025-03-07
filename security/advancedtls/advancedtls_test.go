@@ -102,7 +102,7 @@ func (f fakeProviderSPIFFE) KeyMaterial(context.Context) (*certprovider.KeyMater
 		return &certprovider.KeyMaterial{SPIFFEBundleMap: cs.ClientSPIFFEBundle}, nil
 	}
 	if f.pt == provTypeRoot && !f.isClient {
-		return &certprovider.KeyMaterial{SPIFFEBundleMap: cs.ClientSPIFFEBundle}, nil
+		return &certprovider.KeyMaterial{SPIFFEBundleMap: cs.ServerSPIFFEBundle}, nil
 	}
 	if f.pt == provTypeIdentity && f.isClient {
 		return &certprovider.KeyMaterial{Certs: []tls.Certificate{cs.ClientSPIFFECert}}, nil
@@ -425,7 +425,8 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			return nil, errors.New("client side server name should have a value")
 		}
 		// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
-		if len(params.VerifiedChains) > 0 && (params.Leaf == nil || params.Leaf.Subject.CommonName != "foo.bar.com") {
+		// "*.test.google.com" is the common name on server certificate server_spiffe.pem
+		if len(params.VerifiedChains) > 0 && (params.Leaf == nil || !(params.Leaf.Subject.CommonName == "foo.bar.com" || params.Leaf.Subject.CommonName == "*.test.google.com")) {
 			return nil, errors.New("client side params parsing error")
 		}
 
@@ -781,7 +782,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 		// Server:
 		// Expected Behavior: success
 		{
-			desc:                   "Client sets root and identity provider; Server sets root and identity provider; mutualTLS",
+			desc:                   "Client SPIFFE and Server SPIFFE",
 			clientIdentityProvider: fakeProviderSPIFFE{pt: provTypeIdentity, isClient: true},
 			clientRootProvider:     fakeProviderSPIFFE{isClient: true},
 			clientVerifyFunc:       clientVerifyFuncGood,
@@ -878,6 +879,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				}
 				_, serverAuthInfo, err := serverTLS.ServerHandshake(serverRawConn)
 				if err != nil {
+					fmt.Printf("%v", err)
 					serverRawConn.Close()
 					close(done)
 					return
@@ -961,10 +963,18 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					serverRoot = result.TrustCerts
 				} else if test.serverRootProvider != nil {
 					km, _ := test.serverRootProvider.KeyMaterial(ctx)
-					serverRoot = km.Roots
+					if km.SPIFFEBundleMap != nil {
+						rootPool := x509.NewCertPool()
+						// Known hardcoded values for the test SPIFFE Bundle Map
+						rootPool.AddCert(km.SPIFFEBundleMap["foo.bar.com"].X509Authorities()[0])
+						serverRoot = rootPool
+					} else {
+						serverRoot = km.Roots
+					}
 				}
 				serverVerifiedChainsCp := x509.NewCertPool()
 				serverVerifiedChainsCp.AddCert(serverVerifiedChains[0][len(serverVerifiedChains[0])-1])
+
 				if !serverVerifiedChainsCp.Equal(serverRoot) {
 					t.Fatalf("server verified chain hierarchy doesn't match")
 				}
@@ -996,7 +1006,14 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					clientRoot = result.TrustCerts
 				} else if test.clientRootProvider != nil {
 					km, _ := test.clientRootProvider.KeyMaterial(ctx)
-					clientRoot = km.Roots
+					if km.SPIFFEBundleMap != nil {
+						rootPool := x509.NewCertPool()
+						// Known hardcoded values for the test SPIFFE Bundle Map
+						rootPool.AddCert(km.SPIFFEBundleMap["example.com"].X509Authorities()[0])
+						clientRoot = rootPool
+					} else {
+						clientRoot = km.Roots
+					}
 				}
 				clientVerifiedChainsCp := x509.NewCertPool()
 				clientVerifiedChainsCp.AddCert(clientVerifiedChains[0][len(clientVerifiedChains[0])-1])

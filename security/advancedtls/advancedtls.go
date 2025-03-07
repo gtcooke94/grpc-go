@@ -366,12 +366,17 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 		// callback is not contained in tls.Config, we have nothing to set here.
 		// We will invoke the callback in ServerHandshake.
 	case o.RootOptions.RootProvider != nil:
-		o.RootOptions.GetRootCertificates = func(*ConnectionInfo) (*RootCertificates, error) {
+		o.RootOptions.GetRootCertificates = func(connectionInfo *ConnectionInfo) (*RootCertificates, error) {
+			// TODO(gregorycooke) - this is where we will use the spiffe bundle
 			km, err := o.RootOptions.RootProvider.KeyMaterial(context.Background())
 			if err != nil {
 				return nil, err
 			}
-			return &RootCertificates{TrustCerts: km.Roots}, nil
+			if km.SPIFFEBundleMap != nil {
+				return getRootsFromSPIFFEBundleMap(connectionInfo, km.SPIFFEBundleMap)
+			} else {
+				return &RootCertificates{TrustCerts: km.Roots}, nil
+			}
 		}
 	default:
 		// No root certificate options specified by user. Use the certificates
@@ -415,7 +420,7 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 
 func getRootsFromSPIFFEBundleMap(connectionInfo *ConnectionInfo, bundleMap credinternal.SPIFFEBundleMap) (*RootCertificates, error) {
 	if len(connectionInfo.RawCerts) == 0 {
-		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap(%v, %v) had empty connectionInfo.RawCerts. Need certificate chain to lookup roots.")
+		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() had empty connectionInfo.RawCerts. Need certificate chain to lookup roots.")
 	}
 	leafCert, err := x509.ParseCertificate(connectionInfo.RawCerts[0])
 	if err != nil {
@@ -433,7 +438,10 @@ func getRootsFromSPIFFEBundleMap(connectionInfo *ConnectionInfo, bundleMap credi
 	// 2. Use the trust domain in the peer certificate's SPIFFE ID to lookup
 	//    the SPIFFE trust bundle. If the trust domain is not contained in the
 	//    configured trust map, reject the certificate.
-	spiffeBundle := bundleMap[spiffeId.Host]
+	spiffeBundle, ok := bundleMap[spiffeId.Host]
+	if !ok {
+		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() failed. No bundle found for peer certificates trust domain %v", spiffeId.Host)
+	}
 	roots := spiffeBundle.X509Authorities()
 	rootPool := x509.NewCertPool()
 	for _, root := range roots {

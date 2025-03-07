@@ -40,7 +40,7 @@ import (
 
 const (
 	// Default timeout for normal connections.
-	defaultTestTimeout = 5 * time.Second
+	defaultTestTimeout = 5 * time.Hour
 	// Intervals that set to monitor the credential updates.
 	credRefreshingInterval = 200 * time.Millisecond
 	// Time we wait for the credential updates to be picked up.

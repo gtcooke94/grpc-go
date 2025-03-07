@@ -53,11 +53,10 @@ const (
 )
 
 type fakeProvider struct {
-	pt              provType
-	isClient        bool
-	wantMultiCert   bool
-	useSpiffeBundleMap bool
-	wantError       bool
+	pt            provType
+	isClient      bool
+	wantMultiCert bool
+	wantError     bool
 }
 
 func (f fakeProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, error) {
@@ -69,12 +68,7 @@ func (f fakeProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, e
 		return nil, fmt.Errorf("cs.LoadCerts() failed, err: %v", err)
 	}
 	if f.pt == provTypeRoot && f.isClient {
-		if f.useSpiffeBundleMap {
-			// 
-
-		} else {
-			return &certprovider.KeyMaterial{Roots: cs.ClientTrust1}, nil
-		}
+		return &certprovider.KeyMaterial{Roots: cs.ClientTrust1}, nil
 	}
 	if f.pt == provTypeRoot && !f.isClient {
 		return &certprovider.KeyMaterial{Roots: cs.ServerTrust1}, nil
@@ -92,6 +86,31 @@ func (f fakeProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, e
 }
 
 func (f fakeProvider) Close() {}
+
+type fakeProviderSPIFFE struct {
+	pt        provType
+	isClient  bool
+	wantError bool
+}
+
+func (f fakeProviderSPIFFE) KeyMaterial(context.Context) (*certprovider.KeyMaterial, error) {
+	cs := &testutils.CertStore{}
+	if err := cs.LoadCerts(); err != nil {
+		return nil, fmt.Errorf("cs.LoadCerts() failed, err: %v", err)
+	}
+	if f.pt == provTypeRoot && f.isClient {
+		return &certprovider.KeyMaterial{SPIFFEBundleMap: cs.ClientSPIFFEBundle}, nil
+	}
+	if f.pt == provTypeRoot && !f.isClient {
+		return &certprovider.KeyMaterial{SPIFFEBundleMap: cs.ClientSPIFFEBundle}, nil
+	}
+	if f.pt == provTypeIdentity && f.isClient {
+		return &certprovider.KeyMaterial{Certs: []tls.Certificate{cs.ClientSPIFFECert}}, nil
+	}
+	return &certprovider.KeyMaterial{Certs: []tls.Certificate{cs.ServerSPIFFECert}}, nil
+}
+
+func (f fakeProviderSPIFFE) Close() {}
 
 func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 	tests := []struct {
@@ -756,6 +775,20 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverMutualTLS:        true,
 			serverIdentityProvider: fakeProvider{pt: provTypeIdentity, isClient: false, wantMultiCert: true},
 			serverRootProvider:     fakeProvider{isClient: false},
+			serverVerificationType: CertVerification,
+		},
+		// Client:
+		// Server:
+		// Expected Behavior: success
+		{
+			desc:                   "Client sets root and identity provider; Server sets root and identity provider; mutualTLS",
+			clientIdentityProvider: fakeProviderSPIFFE{pt: provTypeIdentity, isClient: true},
+			clientRootProvider:     fakeProviderSPIFFE{isClient: true},
+			clientVerifyFunc:       clientVerifyFuncGood,
+			clientVerificationType: CertVerification,
+			serverMutualTLS:        true,
+			serverIdentityProvider: fakeProviderSPIFFE{pt: provTypeIdentity, isClient: false},
+			serverRootProvider:     fakeProviderSPIFFE{isClient: false},
 			serverVerificationType: CertVerification,
 		},
 		// Client: set valid credentials with the revocation config

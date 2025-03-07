@@ -279,8 +279,7 @@ func (o *Options) clientConfig() (*tls.Config, error) {
 				return nil, err
 			}
 			if km.SPIFFEBundleMap != nil {
-				return getRootsFromSPIFFEBundleMap(connectionInfo, km)
-
+				return getRootsFromSPIFFEBundleMap(connectionInfo, km.SPIFFEBundleMap)
 			} else {
 				return &RootCertificates{TrustCerts: km.Roots}, nil
 			}

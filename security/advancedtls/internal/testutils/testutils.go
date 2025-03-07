@@ -66,8 +66,10 @@ type CertStore struct {
 	ServerTrust2 *x509.CertPool
 	// ServerTrust2 is the root certificate used on the server side.
 	ServerTrust3       *x509.CertPool
-	ClientSpiffeBundle credinternal.SPIFFEBundleMap
-	ServerSpiffeBundle credinternal.SPIFFEBundleMap
+	ClientSPIFFEBundle credinternal.SPIFFEBundleMap
+	ServerSPIFFEBundle credinternal.SPIFFEBundleMap
+	ClientSPIFFECert   tls.Certificate
+	ServerSPIFFECert   tls.Certificate
 }
 
 func readTrustCert(fileName string) (*x509.CertPool, error) {
@@ -128,5 +130,6 @@ func (cs *CertStore) LoadCerts() error {
 	if cs.ServerTrust3, err = readTrustCert(testdata.Path("crl/provider_server_trust_cert.pem")); err != nil {
 		return err
 	}
+	if cs.ClientSPIFFECert, err = tls.LoadX509KeyPair(testdata.Path("spiffe/client_spiffe.pem"))
 	return nil
 }

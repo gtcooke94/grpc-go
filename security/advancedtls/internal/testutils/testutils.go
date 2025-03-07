@@ -137,10 +137,10 @@ func (cs *CertStore) LoadCerts() error {
 	if cs.ServerSPIFFECert, err = tls.LoadX509KeyPair(testdata.Path("spiffe/server_spiffe.pem"), testdata.Path("spiffe/server.key")); err != nil {
 		return err
 	}
-	if cs.ClientSPIFFEBundle, err = credinternal.LoadSPIFFEBundleMap(testdata.Path("spiffe/spiffebundle.json")); err != nil {
+	if cs.ClientSPIFFEBundle, err = credinternal.LoadSPIFFEBundleMap(testdata.Path("spiffe/client_spiffebundle.json")); err != nil {
 		return err
 	}
-	if cs.ServerSPIFFEBundle, err = credinternal.LoadSPIFFEBundleMap(testdata.Path("spiffe/spiffebundle2.json")); err != nil {
+	if cs.ServerSPIFFEBundle, err = credinternal.LoadSPIFFEBundleMap(testdata.Path("spiffe/server_spiffebundle.json")); err != nil {
 		return err
 	}
 	return nil

@@ -68,10 +68,10 @@ $ openssl x509 -req -CA ca.pem -CAkey ca.key -CAcreateserial \
  -in spiffe-cert.csr -out server1_spiffe.pem -extensions spiffe_server_e2e \
   -extfile spiffe-openssl.cnf -days 3650 -sha256
 
-Additionally, SPIFFE trust bundle map files spiffebundle.json and \
-spiffebundle1.json are manually created for end to end testing. The \
-spiffebundle.json contains "example.com" trust domain (only this entry is used \
-in e2e tests) matching URI SAN of server1_spiffe.pem, and the CA certificate \
-there is ca.pem. The spiffebundle.json file contains "foo.bar.com" trust \
-domain (only this entry is used in e2e tests) matching URI SAN of \
-client_spiffe.pem, and the CA certificate there is also ca.pem.
+Additionally, SPIFFE trust bundle map files client_spiffebundle.json and
+server_spiffebundle.json are manually created for end to end testing. The
+client_spiffebundle.json contains "example.com" trust domain (only this entry is
+used in e2e tests) matching URI SAN of server_spiffe.pem, and the CA certificate
+there is ca.pem. The server_spiffebundle.json file contains "foo.bar.com" trust
+domain matching URI SAN of client_spiffe.pem, and the CA certificate there is
+also ca.pem.

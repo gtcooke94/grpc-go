@@ -53,10 +53,11 @@ const (
 )
 
 type fakeProvider struct {
-	pt            provType
-	isClient      bool
-	wantMultiCert bool
-	wantError     bool
+	pt              provType
+	isClient        bool
+	wantMultiCert   bool
+	useSpiffeBundleMap bool
+	wantError       bool
 }
 
 func (f fakeProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, error) {
@@ -68,7 +69,12 @@ func (f fakeProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, e
 		return nil, fmt.Errorf("cs.LoadCerts() failed, err: %v", err)
 	}
 	if f.pt == provTypeRoot && f.isClient {
-		return &certprovider.KeyMaterial{Roots: cs.ClientTrust1}, nil
+		if f.useSpiffeBundleMap {
+			// 
+
+		} else {
+			return &certprovider.KeyMaterial{Roots: cs.ClientTrust1}, nil
+		}
 	}
 	if f.pt == provTypeRoot && !f.isClient {
 		return &certprovider.KeyMaterial{Roots: cs.ServerTrust1}, nil

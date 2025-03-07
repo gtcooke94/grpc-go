@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 
+	credinternal "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
@@ -64,7 +65,9 @@ type CertStore struct {
 	// ServerTrust2 is the root certificate used on the server side.
 	ServerTrust2 *x509.CertPool
 	// ServerTrust2 is the root certificate used on the server side.
-	ServerTrust3 *x509.CertPool
+	ServerTrust3       *x509.CertPool
+	ClientSpiffeBundle credinternal.SPIFFEBundleMap
+	ServerSpiffeBundle credinternal.SPIFFEBundleMap
 }
 
 func readTrustCert(fileName string) (*x509.CertPool, error) {

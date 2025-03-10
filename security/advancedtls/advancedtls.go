@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	credinternal "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/internal/credentials/spiffe"
 )
 
 // CertificateChains represents a slice of certificate chains, each consisting
@@ -418,7 +419,7 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 	return config, nil
 }
 
-func getRootsFromSPIFFEBundleMap(connectionInfo *ConnectionInfo, bundleMap credinternal.SPIFFEBundleMap) (*RootCertificates, error) {
+func getRootsFromSPIFFEBundleMap(connectionInfo *ConnectionInfo, bundleMap spiffe.SPIFFEBundleMap) (*RootCertificates, error) {
 	if len(connectionInfo.RawCerts) == 0 {
 		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() had empty connectionInfo.RawCerts. Need certificate chain to lookup roots.")
 	}

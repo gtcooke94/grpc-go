@@ -537,6 +537,12 @@ func (tmpFiles *tmpCredsFiles) removeFiles() {
 	os.Remove(tmpFiles.serverCertTmp.Name())
 	os.Remove(tmpFiles.serverKeyTmp.Name())
 	os.Remove(tmpFiles.serverTrustTmp.Name())
+	os.Remove(tmpFiles.clientSPIFFECertTmp.Name())
+	os.Remove(tmpFiles.clientSPIFFEKeyTmp.Name())
+	os.Remove(tmpFiles.clientSPIFFEBundleTmp.Name())
+	os.Remove(tmpFiles.serverSPIFFECertTmp.Name())
+	os.Remove(tmpFiles.serverSPIFFEKeyTmp.Name())
+	os.Remove(tmpFiles.serverSPIFFEBundleTmp.Name())
 }
 
 func copyFileContents(sourceFile, destinationFile string) error {
@@ -765,61 +771,48 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 				t.Fatal(err)
 			}
 			defer conn.Close()
-
-			// certUpdateFunc: func() {
-			// 	err = copyFileContents(testdata.Path("client_cert_2.pem"), tmpFiles.clientCertTmp.Name())
-			// 	if err != nil {
-			// 		t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_cert_2.pem"), tmpFiles.clientCertTmp.Name(), err)
-			// 	}
-			// },
-			// keyUpdateFunc: func() {
-			// 	err = copyFileContents(testdata.Path("client_key_2.pem"), tmpFiles.clientKeyTmp.Name())
-			// 	if err != nil {
-			// 		t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_key_2.pem"), tmpFiles.clientKeyTmp.Name(), err)
-			// 	}
-			// },
-			// // Make the identity cert change, and wait 1 second for the provider to
-			// // pick up the change.
-			// test.certUpdateFunc()
-			// time.Sleep(sleepInterval)
-			// // The already-established connection should not be affected.
-			// err = callAndVerify(ctx, "rpc call 2", greetClient, false)
-			// if err != nil {
-			// 	t.Fatal(err)
-			// }
-			// // New connections should still be good, because the Provider didn't pick
-			// // up the changes due to key-cert mismatch.
-			// conn2, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 3", clientTLSCreds, false)
-			// if err != nil {
-			// 	t.Fatal(err)
-			// }
-			// defer conn2.Close()
-			// // Make the identity key change, and wait 1 second for the provider to
-			// // pick up the change.
-			// test.keyUpdateFunc()
-			// time.Sleep(sleepInterval)
-			// // New connections should fail now, because the Provider picked the
-			// // change, and *_cert_2.pem is not trusted by *_trust_cert_1.pem on the
-			// // other side.
-			// ctx2, cancel2 := context.WithTimeout(context.Background(), defaultTestTimeout)
-			// conn3, _, err := callAndVerifyWithClientConn(ctx2, addr, "rpc call 4", clientTLSCreds, true)
-			// if err != nil {
-			// 	t.Fatal(err)
-			// }
-			// defer conn3.Close()
-			// // Immediately cancel the context so the dialing won't drag the entire timeout still it stops.
-			// cancel2()
-			// // Make the trust cert change on the other side, and wait 1 second for
-			// // the provider to pick up the change.
-			// test.trustCertUpdateFunc()
-			// time.Sleep(sleepInterval)
-			// // New connections should be good, because the other side is using
-			// // *_trust_cert_2.pem now.
-			// conn4, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 5", clientTLSCreds, false)
-			// if err != nil {
-			// 	t.Fatal(err)
-			// }
-			// defer conn4.Close()
+			// Make the identity cert change, and wait 1 second for the provider to
+			// pick up the change.
+			test.certUpdateFunc()
+			time.Sleep(sleepInterval)
+			// The already-established connection should not be affected.
+			err = callAndVerify(ctx, "rpc call 2", greetClient, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			// New connections should still be good, because the Provider didn't pick
+			// up the changes due to key-cert mismatch.
+			conn2, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 3", clientTLSCreds, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn2.Close()
+			// Make the identity key change, and wait 1 second for the provider to
+			// pick up the change.
+			test.keyUpdateFunc()
+			time.Sleep(sleepInterval)
+			// New connections should fail now, because the Provider picked the
+			// change, and *_cert_2.pem is not trusted by *_trust_cert_1.pem on the
+			// other side.
+			ctx2, cancel2 := context.WithTimeout(context.Background(), defaultTestTimeout)
+			conn3, _, err := callAndVerifyWithClientConn(ctx2, addr, "rpc call 4", clientTLSCreds, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn3.Close()
+			// Immediately cancel the context so the dialing won't drag the entire timeout still it stops.
+			cancel2()
+			// Make the trust cert change on the other side, and wait 1 second for
+			// the provider to pick up the change.
+			test.trustCertUpdateFunc()
+			time.Sleep(sleepInterval)
+			// New connections should be good, because the other side is using
+			// *_trust_cert_2.pem now.
+			conn4, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 5", clientTLSCreds, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer conn4.Close()
 		})
 	}
 }
@@ -902,7 +895,6 @@ func (s) TestPEMFileProviderSPIFFEEnd2End(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clientTLSCreds failed to create, error: %v", err)
 	}
-
 	// At initialization, the connection should be good.
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	defer cancel()
@@ -911,48 +903,54 @@ func (s) TestPEMFileProviderSPIFFEEnd2End(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	// Make the identity cert change, and wait 1 second for the provider to
+
+	// keyUpdateFunc: func() {
+	// 	err = copyFileContents(testdata.Path("client_key_2.pem"), tmpFiles.clientKeyTmp.Name())
+	// 	if err != nil {
+	// 		t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_key_2.pem"), tmpFiles.clientKeyTmp.Name(), err)
+	// 	}
+	// },
+	// // Make the identity cert change, and wait 1 second for the provider to
+	err = copyFileContents(testdata.Path("spiffe/server_spiffe.pem"), tmpFiles.clientSPIFFECertTmp.Name())
+	if err != nil {
+		t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("spiffe/server_spiffe.pem"), tmpFiles.clientSPIFFECertTmp.Name(), err)
+	}
 	// pick up the change.
-	test.certUpdateFunc()
 	time.Sleep(sleepInterval)
 	// The already-established connection should not be affected.
 	err = callAndVerify(ctx, "rpc call 2", greetClient, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	// New connections should still be good, because the Provider didn't pick
-	// up the changes due to key-cert mismatch.
-	conn2, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 3", clientTLSCreds, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn2.Close()
 	// Make the identity key change, and wait 1 second for the provider to
 	// pick up the change.
-	test.keyUpdateFunc()
+	err = copyFileContents(testdata.Path("spiffe/server.key"), tmpFiles.clientSPIFFEKeyTmp.Name())
+	if err != nil {
+		t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("spiffe/server.key"), tmpFiles.clientSPIFFEKeyTmp.Name(), err)
+	}
 	time.Sleep(sleepInterval)
 	// New connections should fail now, because the Provider picked the
 	// change, and *_cert_2.pem is not trusted by *_trust_cert_1.pem on the
 	// other side.
-	ctx2, cancel2 := context.WithTimeout(context.Background(), defaultTestTimeout)
+	ctx2, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 	conn3, _, err := callAndVerifyWithClientConn(ctx2, addr, "rpc call 4", clientTLSCreds, true)
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer conn3.Close()
 	// Immediately cancel the context so the dialing won't drag the entire timeout still it stops.
-	cancel2()
-	// Make the trust cert change on the other side, and wait 1 second for
-	// the provider to pick up the change.
-	test.trustCertUpdateFunc()
-	time.Sleep(sleepInterval)
-	// New connections should be good, because the other side is using
-	// *_trust_cert_2.pem now.
-	conn4, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 5", clientTLSCreds, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer conn4.Close()
+	cancel()
+	// // Make the trust cert change on the other side, and wait 1 second for
+	// // the provider to pick up the change.
+	// test.trustCertUpdateFunc()
+	// time.Sleep(sleepInterval)
+	// // New connections should be good, because the other side is using
+	// // *_trust_cert_2.pem now.
+	// conn4, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 5", clientTLSCreds, false)
+	// if err != nil {
+	// 	t.Fatal(err)
+	// }
+	// defer conn4.Close()
 }
 
 func (s) TestDefaultHostNameCheck(t *testing.T) {

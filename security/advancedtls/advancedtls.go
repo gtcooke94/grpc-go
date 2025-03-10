@@ -421,7 +421,7 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 
 func getRootsFromSPIFFEBundleMap(connectionInfo *ConnectionInfo, bundleMap spiffe.SPIFFEBundleMap) (*RootCertificates, error) {
 	if len(connectionInfo.RawCerts) == 0 {
-		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() had empty connectionInfo.RawCerts. Need certificate chain to lookup roots.")
+		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() had empty connectionInfo.RawCerts. Need certificate chain to lookup roots")
 	}
 	leafCert, err := x509.ParseCertificate(connectionInfo.RawCerts[0])
 	if err != nil {
@@ -439,6 +439,7 @@ func getRootsFromSPIFFEBundleMap(connectionInfo *ConnectionInfo, bundleMap spiff
 	// 2. Use the trust domain in the peer certificate's SPIFFE ID to lookup
 	//    the SPIFFE trust bundle. If the trust domain is not contained in the
 	//    configured trust map, reject the certificate.
+	fmt.Printf("GREG: %v", spiffeId.Host)
 	spiffeBundle, ok := bundleMap[spiffeId.Host]
 	if !ok {
 		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() failed. No bundle found for peer certificates trust domain %v", spiffeId.Host)

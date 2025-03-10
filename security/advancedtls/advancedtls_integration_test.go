@@ -904,13 +904,6 @@ func (s) TestPEMFileProviderSPIFFEEnd2End(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// keyUpdateFunc: func() {
-	// 	err = copyFileContents(testdata.Path("client_key_2.pem"), tmpFiles.clientKeyTmp.Name())
-	// 	if err != nil {
-	// 		t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("client_key_2.pem"), tmpFiles.clientKeyTmp.Name(), err)
-	// 	}
-	// },
-	// // Make the identity cert change, and wait 1 second for the provider to
 	err = copyFileContents(testdata.Path("spiffe/server_spiffe.pem"), tmpFiles.clientSPIFFECertTmp.Name())
 	if err != nil {
 		t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("spiffe/server_spiffe.pem"), tmpFiles.clientSPIFFECertTmp.Name(), err)
@@ -940,17 +933,21 @@ func (s) TestPEMFileProviderSPIFFEEnd2End(t *testing.T) {
 	defer conn3.Close()
 	// Immediately cancel the context so the dialing won't drag the entire timeout still it stops.
 	cancel()
-	// // Make the trust cert change on the other side, and wait 1 second for
-	// // the provider to pick up the change.
-	// test.trustCertUpdateFunc()
-	// time.Sleep(sleepInterval)
-	// // New connections should be good, because the other side is using
-	// // *_trust_cert_2.pem now.
-	// conn4, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 5", clientTLSCreds, false)
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-	// defer conn4.Close()
+
+	// Make the SPIFFE Bundle change - we swapped the client side to use the
+	// server cert and key, so if we swap the SPIFFE bundle on the server-side
+	// it should work the provider to pick up the change.
+	err = copyFileContents(testdata.Path("spiffe/client_spiffebundle.json"), tmpFiles.serverSPIFFEBundleTmp.Name())
+	if err != nil {
+		t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("spiffe/client_spiffebundle.json"), tmpFiles.serverSPIFFEBundleTmp.Name(), err)
+	}
+	time.Sleep(sleepInterval)
+	// New connections should be good, because the other side is using an expected spiffe bundle and certs
+	conn4, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 5", clientTLSCreds, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn4.Close()
 }
 
 func (s) TestDefaultHostNameCheck(t *testing.T) {

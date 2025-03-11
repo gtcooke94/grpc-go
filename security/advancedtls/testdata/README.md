@@ -46,3 +46,54 @@ commands we run:
    $ openssl verify -verbose -CAfile ca_cert.pem  subject_cert.pem
 
    ```
+
+SPIFFE test credentials:
+=======================
+
+The SPIFFE related extensions are listed in spiffe-openssl.cnf config.  To
+generate the SPIFFE credentials, run `generate.sh` in the `testdata/spiffe`
+folder.  After running that script, you must manually create the
+client_spiffebundle.json and server_spiffebundle.json file.  The
+client_spiffebundle.json contains the "example.com" trust domain (only this
+entry is used in e2e tests) matching URI SAN of server_spiffe.pem, and the CA
+certificate there is ca.pem. The server_spiffebundle.json file contains
+"foo.bar.com" trust domain matching URI SAN of client_spiffe.pem, and the CA
+certificate there is also ca.pem.
+
+If updating these files, the `x5c` field in the json is the raw PEM certificates
+and can be copy pasted from the certificate file. `n` and `e` are values from
+the public key. `e` should *probably* be `AQAB` as it is the exponent. `n` can
+be fetched from the certificate by getting the RSA key from the cert and
+extracting the value. This can be done in golang with the following codeblock:
+
+```
+func GetBase64ModulusFromPublicKey(key *rsa.PublicKey) string { return
+base64.RawURLEncoding.EncodeToString(key.N.Bytes()) }
+
+block, _ := pem.Decode(rawPemCert) cert, _ := x509.ParseCertificate(block.Bytes)
+publicKey := cert.PublicKey.(*rsa.PublicKey)
+fmt.Println(GetBase64ModulusFromPublicKey(publicKey))
+```
+
+Then, those values are placed in json as follows:
+
+```
+{
+    "trust_domains": {
+        "foo.bar.com": { // or "example.com" for the client bundle
+            "spiffe_sequence": 12035488,
+            "keys": [
+                {
+                    "kty": "RSA",
+                    "use": "x509-svid",
+                    "x5c": [
+                     "<content of the ca.pem file without the BEGIN and END certificate line>"
+                    ],
+                    "n": "<the value as described above>",
+                    "e": "AQAB"
+                }
+            ]
+        }
+    }
+}
+```

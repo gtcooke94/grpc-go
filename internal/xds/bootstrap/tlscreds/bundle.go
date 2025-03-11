@@ -48,9 +48,10 @@ type bundle struct {
 // See gRFC A65: github.com/grpc/proposal/blob/master/A65-xds-mtls-creds-in-bootstrap.md
 func NewBundle(jd json.RawMessage) (credentials.Bundle, func(), error) {
 	cfg := &struct {
-		CertificateFile   string `json:"certificate_file"`
-		CACertificateFile string `json:"ca_certificate_file"`
-		PrivateKeyFile    string `json:"private_key_file"`
+		CertificateFile          string `json:"certificate_file"`
+		CACertificateFile        string `json:"ca_certificate_file"`
+		PrivateKeyFile           string `json:"private_key_file"`
+		SPIFFETrustBundleMapFile string `json:"spiffe_trust_bundle_map_file"`
 	}{}
 
 	if jd != nil {

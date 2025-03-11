@@ -164,6 +164,9 @@ func buildSPIFFEVerifyFunc(spiffeBundleMap spiffe.SPIFFEBundleMap, peerVerifiedC
 			rawCertList[i] = cert
 		}
 		roots, err := getRootsFromSPIFFEBundleMap(spiffeBundleMap, leafCert)
+		if err != nil {
+			return err
+		}
 
 		opts := x509.VerifyOptions{
 			Roots:         roots,
@@ -178,12 +181,12 @@ func buildSPIFFEVerifyFunc(spiffeBundleMap spiffe.SPIFFEBundleMap, peerVerifiedC
 		if err != nil {
 			return err
 		}
-		verifiedChains = chains
+		peerVerifiedChains = chains
 		return nil
 	}
 }
 
-func getRootsFromSPIFFEBundleMap(bundleMap spiffe.SPIFFEBundleMap, leafCert *x509.Certificate) (*RootCertificates, error) {
+func getRootsFromSPIFFEBundleMap(bundleMap spiffe.SPIFFEBundleMap, leafCert *x509.Certificate) (*x509.CertPool, error) {
 	// 1. Upon receiving a peer certificate, verify that it is a well-formed SPIFFE
 	//    leaf certificate.  In particular, it must have a single URI SAN containing
 	//    a well-formed SPIFFE ID ([SPIFFE ID format]).

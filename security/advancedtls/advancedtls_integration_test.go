@@ -828,7 +828,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 // Then the identity key is changed. This time IdentityProvider should pick
 // up the update, and the connection should fail, due to the trust certs on the
 // other side is not changed.
-// Finally, the trust certs that other-side's RootProvider is watching get
+// Finally, the SPIFFE Bundle that other-side's RootProvider is watching get
 // changed. The connection should go back to normal again.
 func (s) TestPEMFileProviderSPIFFEEnd2End(t *testing.T) {
 	tmpFiles, err := createTmpFiles()

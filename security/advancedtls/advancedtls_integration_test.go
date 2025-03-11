@@ -40,7 +40,7 @@ import (
 
 const (
 	// Default timeout for normal connections.
-	defaultTestTimeout = 5 * time.Hour
+	defaultTestTimeout = 5 * time.Second
 	// Intervals that set to monitor the credential updates.
 	credRefreshingInterval = 200 * time.Millisecond
 	// Time we wait for the credential updates to be picked up.
@@ -594,7 +594,6 @@ func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovid
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
-
 	clientSPIFFEIdentityOptions := pemfile.Options{
 		CertFile:        tmpFiles.clientSPIFFECertTmp.Name(),
 		KeyFile:         tmpFiles.clientSPIFFEKeyTmp.Name(),
@@ -612,7 +611,6 @@ func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovid
 	if err != nil {
 		return nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
-
 	serverSPIFFEIdentityOptions := pemfile.Options{
 		CertFile:        tmpFiles.serverSPIFFECertTmp.Name(),
 		KeyFile:         tmpFiles.serverSPIFFEKeyTmp.Name(),

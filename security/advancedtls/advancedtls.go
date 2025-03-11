@@ -274,7 +274,6 @@ func (o *Options) clientConfig() (*tls.Config, error) {
 		// We will invoke the callback in ClientHandshake.
 	case o.RootOptions.RootProvider != nil:
 		o.RootOptions.GetRootCertificates = func(connectionInfo *ConnectionInfo) (*RootCertificates, error) {
-			// TODO(gregorycooke) - this is where we will use the spiffe bundle
 			km, err := o.RootOptions.RootProvider.KeyMaterial(context.Background())
 			if err != nil {
 				return nil, err
@@ -368,7 +367,6 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 		// We will invoke the callback in ServerHandshake.
 	case o.RootOptions.RootProvider != nil:
 		o.RootOptions.GetRootCertificates = func(connectionInfo *ConnectionInfo) (*RootCertificates, error) {
-			// TODO(gregorycooke) - this is where we will use the spiffe bundle
 			km, err := o.RootOptions.RootProvider.KeyMaterial(context.Background())
 			if err != nil {
 				return nil, err
@@ -439,7 +437,6 @@ func getRootsFromSPIFFEBundleMap(connectionInfo *ConnectionInfo, bundleMap spiff
 	// 2. Use the trust domain in the peer certificate's SPIFFE ID to lookup
 	//    the SPIFFE trust bundle. If the trust domain is not contained in the
 	//    configured trust map, reject the certificate.
-	fmt.Printf("GREG: %v", spiffeId.Host)
 	spiffeBundle, ok := bundleMap[spiffeId.Host]
 	if !ok {
 		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() failed. No bundle found for peer certificates trust domain %v", spiffeId.Host)

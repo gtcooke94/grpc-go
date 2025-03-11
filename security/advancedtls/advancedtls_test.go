@@ -778,8 +778,8 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverRootProvider:     fakeProvider{isClient: false},
 			serverVerificationType: CertVerification,
 		},
-		// Client:
-		// Server:
+		// Client: set clientIdentityProvider and clientRootProvider to use SPIFFE Bundles for roots and associated identity certs.
+		// Server: set serverIdentityProvider and serverRootProvider to use SPIFFE Bundles for roots and associated identity certs.
 		// Expected Behavior: success
 		{
 			desc:                   "Client SPIFFE and Server SPIFFE",
@@ -974,7 +974,6 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				}
 				serverVerifiedChainsCp := x509.NewCertPool()
 				serverVerifiedChainsCp.AddCert(serverVerifiedChains[0][len(serverVerifiedChains[0])-1])
-
 				if !serverVerifiedChainsCp.Equal(serverRoot) {
 					t.Fatalf("server verified chain hierarchy doesn't match")
 				}

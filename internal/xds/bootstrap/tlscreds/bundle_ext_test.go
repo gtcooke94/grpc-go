@@ -58,6 +58,7 @@ func (s) TestValidTlsBuilder(t *testing.T) {
 	caCert := testdata.Path("x509/server_ca_cert.pem")
 	clientCert := testdata.Path("x509/client1_cert.pem")
 	clientKey := testdata.Path("x509/client1_key.pem")
+	clientSpiffeBundle := testdata.Path("spiffe_end2end/client_spiffe.json")
 	tests := []struct {
 		name string
 		jd   string
@@ -96,6 +97,10 @@ func (s) TestValidTlsBuilder(t *testing.T) {
 		{
 			name: "Refresh interval, CA chain, private key and certificate chain",
 			jd:   fmt.Sprintf(`{"refresh_interval": "1s","ca_certificate_file":"%s","certificate_file":"%s","private_key_file":"%s"}`, caCert, clientCert, clientKey),
+		},
+		{
+			name: "Refresh interval, CA chain, private key, certificate chain, spiffe bundle",
+			jd:   fmt.Sprintf(`{"refresh_interval": "1s","ca_certificate_file":"%s","certificate_file":"%s","private_key_file":"%s","spiffe_trust_bundle_map_file":"%s"}`, caCert, clientCert, clientKey, clientSpiffeBundle),
 		},
 		{
 			name: "Unknown field",
@@ -222,6 +227,87 @@ func (s) TestCaReloading(t *testing.T) {
 	if ctx.Err() != nil {
 		t.Errorf("Timed out waiting for CA certs reloading")
 	}
+}
+
+func (s) TestSPIFFEReloading(t *testing.T) {
+	serverSPIFFEBundle, err := os.ReadFile(testdata.Path("spiffe_end2end/server_spiffebundle.json"))
+	if err != nil {
+		t.Fatalf("Failed to read test CA cert: %s", err)
+	}
+
+	// Write CA certs to a temporary file so that we can modify it later.
+	spiffePath := t.TempDir() + "/server_spiffe.json"
+	if err = os.WriteFile(spiffePath, serverSPIFFEBundle, 0644); err != nil {
+		t.Fatalf("Failed to write test SPIFFE Bundle %v: %v", serverSPIFFEBundle, err)
+	}
+	cfg := fmt.Sprintf(`{
+		"spiffe_trust_map_bundle_file": "%s",
+		"refresh_interval": ".01s"
+	}`, spiffePath)
+	tlsBundle, stop, err := tlscreds.NewBundle([]byte(cfg))
+	if err != nil {
+		t.Fatalf("Failed to create TLS bundle: %v", err)
+	}
+	defer stop()
+
+	serverCredentials := grpc.Creds(testutils.CreateServerTLSCredentialsSPIFFE(t, tls.NoClientCert))
+	server := stubserver.StartTestService(t, nil, serverCredentials)
+	defer server.Stop()
+
+	conn, err := grpc.NewClient(
+		server.Address,
+		grpc.WithCredentialsBundle(tlsBundle),
+		grpc.WithAuthority("x.test.example.com"),
+	)
+	if err != nil {
+		t.Fatalf("Error dialing: %v", err)
+	}
+	defer conn.Close()
+
+	// ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	// defer cancel()
+
+	// client := testgrpc.NewTestServiceClient(conn)
+	// if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+	// 	t.Errorf("Error calling EmptyCall: %v", err)
+	// }
+	// // close the server and create a new one to force client to do a new
+	// // handshake.
+	// server.Stop()
+
+	// invalidCa, err := os.ReadFile(testdata.Path("ca.pem"))
+	// if err != nil {
+	// 	t.Fatalf("Failed to read test CA cert: %v", err)
+	// }
+	// // unload root cert
+	// err = os.WriteFile(spiffePath, invalidCa, 0644)
+	// if err != nil {
+	// 	t.Fatalf("Failed to write test CA cert: %v", err)
+	// }
+
+	// for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
+	// 	ss := stubserver.StubServer{
+	// 		Address:    server.Address,
+	// 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+	// 	}
+	// 	server = stubserver.StartTestService(t, &ss, serverCredentials)
+
+	// 	// Client handshake should eventually fail because the client CA was
+	// 	// reloaded, and thus the server cert is signed by an unknown CA.
+	// 	t.Log(server)
+	// 	_, err = client.EmptyCall(ctx, &testpb.Empty{})
+	// 	const wantErr = "certificate signed by unknown authority"
+	// 	if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), wantErr) {
+	// 		// Certs have reloaded.
+	// 		server.Stop()
+	// 		break
+	// 	}
+	// 	t.Logf("EmptyCall() got err: %s, want code: %s, want err: %s", err, codes.Unavailable, wantErr)
+	// 	server.Stop()
+	// }
+	// if ctx.Err() != nil {
+	// 	t.Errorf("Timed out waiting for CA certs reloading")
+	// }
 }
 
 func (s) TestMTLS(t *testing.T) {

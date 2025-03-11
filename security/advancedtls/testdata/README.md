@@ -50,28 +50,50 @@ commands we run:
 SPIFFE test credentials:
 =======================
 
-The SPIFFE related extensions are listed in spiffe-openssl.cnf config. Both
-client_spiffe.pem and server1_spiffe.pem are generated in the same way with
-original client.pem and server1.pem but with using that config. Here are the
-exact commands (we pass "-subj" as argument in this case):
-----------------------
-$ openssl req -new -key client.key -out spiffe-cert.csr \
- -subj /C=US/ST=CA/L=SVL/O=gRPC/CN=testclient/ \
- -config spiffe-openssl.cnf -reqexts spiffe_client_e2e
-$ openssl x509 -req -CA ca.pem -CAkey ca.key -CAcreateserial \
- -in spiffe-cert.csr -out client_spiffe.pem -extensions spiffe_client_e2e \
-  -extfile spiffe-openssl.cnf -days 3650 -sha256
-$ openssl req -new -key server1.key -out spiffe-cert.csr \
- -subj /C=US/ST=CA/L=SVL/O=gRPC/CN=*.test.google.com/ \
- -config spiffe-openssl.cnf -reqexts spiffe_server_e2e
-$ openssl x509 -req -CA ca.pem -CAkey ca.key -CAcreateserial \
- -in spiffe-cert.csr -out server1_spiffe.pem -extensions spiffe_server_e2e \
-  -extfile spiffe-openssl.cnf -days 3650 -sha256
+The SPIFFE related extensions are listed in spiffe-openssl.cnf config.  To
+generate the SPIFFE credentials, run `generate.sh` in the `testdata/spiffe`
+folder.  After running that script, you must manually create the
+client_spiffebundle.json and server_spiffebundle.json file.  The
+client_spiffebundle.json contains the "example.com" trust domain (only this
+entry is used in e2e tests) matching URI SAN of server_spiffe.pem, and the CA
+certificate there is ca.pem. The server_spiffebundle.json file contains
+"foo.bar.com" trust domain matching URI SAN of client_spiffe.pem, and the CA
+certificate there is also ca.pem.
 
-Additionally, SPIFFE trust bundle map files client_spiffebundle.json and
-server_spiffebundle.json are manually created for end to end testing. The
-client_spiffebundle.json contains "example.com" trust domain (only this entry is
-used in e2e tests) matching URI SAN of server_spiffe.pem, and the CA certificate
-there is ca.pem. The server_spiffebundle.json file contains "foo.bar.com" trust
-domain matching URI SAN of client_spiffe.pem, and the CA certificate there is
-also ca.pem.
+If updating these files, the `x5c` field in the json is the raw PEM certificates
+and can be copy pasted from the certificate file. `n` and `e` are values from
+the public key. `e` should *probably* be `AQAB` as it is the exponent. `n` can
+be fetched from the certificate by getting the RSA key from the cert and
+extracting the value. This can be done in golang with the following codeblock:
+
+```
+func GetBase64ModulusFromPublicKey(key *rsa.PublicKey) string { return
+base64.RawURLEncoding.EncodeToString(key.N.Bytes()) }
+
+block, _ := pem.Decode(rawPemCert) cert, _ := x509.ParseCertificate(block.Bytes)
+publicKey := cert.PublicKey.(*rsa.PublicKey)
+fmt.Println(GetBase64ModulusFromPublicKey(publicKey))
+```
+
+Then, those values are placed in json as follows:
+
+```
+{
+    "trust_domains": {
+        "foo.bar.com": { // or "example.com" for the client bundle
+            "spiffe_sequence": 12035488,
+            "keys": [
+                {
+                    "kty": "RSA",
+                    "use": "x509-svid",
+                    "x5c": [
+                     "<content of the ca.pem file without the BEGIN and END certificate line>"
+                    ],
+                    "n": "<the value as described above>",
+                    "e": "AQAB"
+                }
+            ]
+        }
+    }
+}
+```

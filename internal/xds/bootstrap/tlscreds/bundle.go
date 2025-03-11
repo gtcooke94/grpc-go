@@ -23,15 +23,19 @@ package tlscreds
 import (
 	"context"
 	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net"
 	"sync"
+	"time"
 
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
+	credinternal "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/internal/credentials/spiffe"
 )
 
 // bundle is an implementation of credentials.Bundle which implements mTLS
@@ -115,9 +119,18 @@ func (c *reloadingCreds) ClientHandshake(ctx context.Context, authority string, 
 	if err != nil {
 		return nil, nil, err
 	}
-	config := &tls.Config{
-		RootCAs:      km.Roots,
-		Certificates: km.Certs,
+	var config *tls.Config
+	if km.SPIFFEBundleMap != nil {
+		var peerVerifiedChains [][]*x509.Certificate
+		config = &tls.Config{
+			InsecureSkipVerify:    true,
+			VerifyPeerCertificate: buildSPIFFEVerifyFunc(km.SPIFFEBundleMap, peerVerifiedChains),
+		}
+	} else {
+		config = &tls.Config{
+			RootCAs:      km.Roots,
+			Certificates: km.Certs,
+		}
 	}
 	return credentials.NewTLS(config).ClientHandshake(ctx, authority, rawConn)
 }
@@ -136,4 +149,60 @@ func (c *reloadingCreds) OverrideServerName(string) error {
 
 func (c *reloadingCreds) ServerHandshake(net.Conn) (net.Conn, credentials.AuthInfo, error) {
 	return nil, nil, errors.New("server handshake is not supported by xDS client TLS credentials")
+}
+
+func buildSPIFFEVerifyFunc(spiffeBundleMap spiffe.SPIFFEBundleMap, peerVerifiedChains [][]*x509.Certificate) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+		// servername?
+		var leafCert *x509.Certificate
+		rawCertList := make([]*x509.Certificate, len(rawCerts))
+		for i, asn1Data := range rawCerts {
+			cert, err := x509.ParseCertificate(asn1Data)
+			if err != nil {
+				return err
+			}
+			rawCertList[i] = cert
+		}
+		roots, err := getRootsFromSPIFFEBundleMap(spiffeBundleMap, leafCert)
+
+		opts := x509.VerifyOptions{
+			Roots:         roots,
+			CurrentTime:   time.Now(),
+			Intermediates: x509.NewCertPool(),
+		}
+
+		for _, cert := range rawCertList[1:] {
+			opts.Intermediates.AddCert(cert)
+		}
+		chains, err := rawCertList[0].Verify(opts)
+		if err != nil {
+			return err
+		}
+		verifiedChains = chains
+		return nil
+	}
+}
+
+func getRootsFromSPIFFEBundleMap(bundleMap spiffe.SPIFFEBundleMap, leafCert *x509.Certificate) (*RootCertificates, error) {
+	// 1. Upon receiving a peer certificate, verify that it is a well-formed SPIFFE
+	//    leaf certificate.  In particular, it must have a single URI SAN containing
+	//    a well-formed SPIFFE ID ([SPIFFE ID format]).
+	spiffeId := credinternal.SPIFFEIDFromCert(leafCert)
+	if spiffeId == nil {
+		return nil, fmt.Errorf("credinternal.SPIFFEIDFromCert(leafCert) = nil, failed to parse a SPIFFE id")
+	}
+
+	// 2. Use the trust domain in the peer certificate's SPIFFE ID to lookup
+	//    the SPIFFE trust bundle. If the trust domain is not contained in the
+	//    configured trust map, reject the certificate.
+	spiffeBundle, ok := bundleMap[spiffeId.Host]
+	if !ok {
+		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() failed. No bundle found for peer certificates trust domain %v", spiffeId.Host)
+	}
+	roots := spiffeBundle.X509Authorities()
+	rootPool := x509.NewCertPool()
+	for _, root := range roots {
+		rootPool.AddCert(root)
+	}
+	return rootPool, nil
 }

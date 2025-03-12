@@ -45,6 +45,8 @@ import (
 )
 
 const (
+	// defaultTestTimeout       = 1 * time.Second
+	// defaultTestShortTimeout  = 10 * time.Millisecond
 	defaultTestTimeout       = 1 * time.Hour
 	defaultTestShortTimeout  = 10 * time.Hour
 	defaultTestCertSAN       = "abc.test.example.com"

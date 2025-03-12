@@ -40,9 +40,9 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
-const defaultTestTimeout = 5 * time.Hour
+// const defaultTestTimeout = 5 * time.Hour
 
-// const defaultTestTimeout = 5 * time.Second
+const defaultTestTimeout = 5 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -277,39 +277,39 @@ func (s) TestSPIFFEReloading(t *testing.T) {
 	// handshake.
 	server.Stop()
 
-	// wrongBundle, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
-	// if err != nil {
-	// 	t.Fatalf("Failed to read test spiffe bundle %v: %v", "spiffe_end2end/client_spiffebundle.json", err)
-	// }
-	// // unload root cert
-	// err = os.WriteFile(spiffePath, wrongBundle, 0644)
-	// if err != nil {
-	// 	t.Fatalf("Failed to write test spiffe bundle %v: %v", "spiffe_end2end/client_spiffebundle.json", err)
-	// }
+	wrongBundle, err := os.ReadFile(testdata.Path("spiffe_end2end/server_spiffebundle.json"))
+	if err != nil {
+		t.Fatalf("Failed to read test spiffe bundle %v: %v", "spiffe_end2end/server_spiffebundle.json", err)
+	}
+	// unload root cert
+	err = os.WriteFile(spiffePath, wrongBundle, 0644)
+	if err != nil {
+		t.Fatalf("Failed to write test spiffe bundle %v: %v", "spiffe_end2end/server_spiffebundle.json", err)
+	}
 
-	// for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
-	// 	ss := stubserver.StubServer{
-	// 		Address:    server.Address,
-	// 		EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
-	// 	}
-	// 	server = stubserver.StartTestService(t, &ss, serverCredentials)
+	for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {
+		ss := stubserver.StubServer{
+			Address:    server.Address,
+			EmptyCallF: func(context.Context, *testpb.Empty) (*testpb.Empty, error) { return &testpb.Empty{}, nil },
+		}
+		server = stubserver.StartTestService(t, &ss, serverCredentials)
 
-	// 	// Client handshake should eventually fail because the client CA was
-	// 	// reloaded, and thus the server cert is signed by an unknown CA.
-	// 	t.Log(server)
-	// 	_, err = client.EmptyCall(ctx, &testpb.Empty{})
-	// 	const wantErr = "certificate signed by unknown authority"
-	// 	if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), wantErr) {
-	// 		// Certs have reloaded.
-	// 		server.Stop()
-	// 		break
-	// 	}
-	// 	t.Logf("EmptyCall() got err: %s, want code: %s, want err: %s", err, codes.Unavailable, wantErr)
-	// 	server.Stop()
-	// }
-	// if ctx.Err() != nil {
-	// 	t.Errorf("Timed out waiting for CA certs reloading")
-	// }
+		// Client handshake should eventually fail because the client CA was
+		// reloaded, and thus the server cert is signed by an unknown CA.
+		t.Log(server)
+		_, err = client.EmptyCall(ctx, &testpb.Empty{})
+		const wantErr = "No bundle found for peer certificates trust domain"
+		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), wantErr) {
+			// Certs have reloaded.
+			server.Stop()
+			break
+		}
+		t.Logf("EmptyCall() got err: %s, want code: %s, want err: %s", err, codes.Unavailable, wantErr)
+		server.Stop()
+	}
+	if ctx.Err() != nil {
+		t.Errorf("Timed out waiting for CA certs reloading")
+	}
 }
 
 func (s) TestMTLS(t *testing.T) {

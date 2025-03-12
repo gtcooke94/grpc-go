@@ -34,7 +34,6 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
-	credinternal "google.golang.org/grpc/internal/credentials"
 	"google.golang.org/grpc/internal/credentials/spiffe"
 )
 
@@ -163,7 +162,7 @@ func buildSPIFFEVerifyFunc(spiffeBundleMap spiffe.SPIFFEBundleMap, peerVerifiedC
 			rawCertList[i] = cert
 		}
 		leafCert := rawCertList[0]
-		roots, err := getRootsFromSPIFFEBundleMap(spiffeBundleMap, leafCert)
+		roots, err := spiffe.GetRootsFromSPIFFEBundleMap(spiffeBundleMap, leafCert)
 		if err != nil {
 			return err
 		}
@@ -184,28 +183,4 @@ func buildSPIFFEVerifyFunc(spiffeBundleMap spiffe.SPIFFEBundleMap, peerVerifiedC
 		peerVerifiedChains = chains
 		return nil
 	}
-}
-
-func getRootsFromSPIFFEBundleMap(bundleMap spiffe.SPIFFEBundleMap, leafCert *x509.Certificate) (*x509.CertPool, error) {
-	// 1. Upon receiving a peer certificate, verify that it is a well-formed SPIFFE
-	//    leaf certificate.  In particular, it must have a single URI SAN containing
-	//    a well-formed SPIFFE ID ([SPIFFE ID format]).
-	spiffeId := credinternal.SPIFFEIDFromCert(leafCert)
-	if spiffeId == nil {
-		return nil, fmt.Errorf("credinternal.SPIFFEIDFromCert(leafCert) = nil, failed to parse a SPIFFE id")
-	}
-
-	// 2. Use the trust domain in the peer certificate's SPIFFE ID to lookup
-	//    the SPIFFE trust bundle. If the trust domain is not contained in the
-	//    configured trust map, reject the certificate.
-	spiffeBundle, ok := bundleMap[spiffeId.Host]
-	if !ok {
-		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() failed. No bundle found for peer certificates trust domain %v", spiffeId.Host)
-	}
-	roots := spiffeBundle.X509Authorities()
-	rootPool := x509.NewCertPool()
-	for _, root := range roots {
-		rootPool.AddCert(root)
-	}
-	return rootPool, nil
 }

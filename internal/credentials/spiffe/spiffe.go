@@ -22,6 +22,7 @@
 package spiffe
 
 import (
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -29,6 +30,7 @@ import (
 
 	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
+	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
 // SPIFFEBundleMap represents a SPIFFE Bundle Map per the spec
@@ -82,4 +84,30 @@ func SPIFFEBundleMapFromBytes(bundleMapBytes []byte) (SPIFFEBundleMap, error) {
 	}
 	return bundleMap, nil
 
+}
+
+// GetRootsFromSPIFFEBundleMap returns the root trust certificates from the
+// SPIFFE bundle map for the given trust domain from the leaf certificate.
+func GetRootsFromSPIFFEBundleMap(bundleMap SPIFFEBundleMap, leafCert *x509.Certificate) (*x509.CertPool, error) {
+	// 1. Upon receiving a peer certificate, verify that it is a well-formed SPIFFE
+	//    leaf certificate.  In particular, it must have a single URI SAN containing
+	//    a well-formed SPIFFE ID ([SPIFFE ID format]).
+	spiffeId := credinternal.SPIFFEIDFromCert(leafCert)
+	if spiffeId == nil {
+		return nil, fmt.Errorf("credinternal.SPIFFEIDFromCert(leafCert) = nil, failed to parse a SPIFFE id")
+	}
+
+	// 2. Use the trust domain in the peer certificate's SPIFFE ID to lookup
+	//    the SPIFFE trust bundle. If the trust domain is not contained in the
+	//    configured trust map, reject the certificate.
+	spiffeBundle, ok := bundleMap[spiffeId.Host]
+	if !ok {
+		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() failed. No bundle found for peer certificates trust domain %v", spiffeId.Host)
+	}
+	roots := spiffeBundle.X509Authorities()
+	rootPool := x509.NewCertPool()
+	for _, root := range roots {
+		rootPool.AddCert(root)
+	}
+	return rootPool, nil
 }

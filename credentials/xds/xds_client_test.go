@@ -45,10 +45,10 @@ import (
 )
 
 const (
-	// defaultTestTimeout       = 1 * time.Second
-	// defaultTestShortTimeout  = 10 * time.Millisecond
-	defaultTestTimeout       = 1 * time.Hour
-	defaultTestShortTimeout  = 10 * time.Hour
+	defaultTestTimeout      = 1 * time.Second
+	defaultTestShortTimeout = 10 * time.Millisecond
+	// defaultTestTimeout       = 1 * time.Hour
+	// defaultTestShortTimeout  = 10 * time.Hour
 	defaultTestCertSAN       = "abc.test.example.com"
 	defaultTestCertSANSPIFFE = "spiffe://foo.bar.com/9eebccd2-12bf-40a6-b262-65fe0487d453"
 	authority                = "authority"
@@ -542,11 +542,12 @@ func (s) TestClientCredsHandshakeTimeout(t *testing.T) {
 // TestClientCredsHandshakeFailure verifies different handshake failure cases.
 func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 	tests := []struct {
-		desc          string
-		handshakeFunc testHandshakeFunc
-		rootProvider  certprovider.Provider
-		san           string
-		wantErr       string
+		desc           string
+		handshakeFunc  testHandshakeFunc
+		rootProvider   certprovider.Provider
+		san            string
+		useSPIFFECreds bool
+		wantErr        string
 	}{
 		{
 			desc:          "cert validation failure",
@@ -561,6 +562,14 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			rootProvider:  makeRootProvider(t, "x509/server_ca_cert.pem"),
 			san:           "bad-san",
 			wantErr:       "do not match any of the accepted SANs",
+		},
+		{
+			desc:           "SPIFFE Bundle validation failure",
+			handshakeFunc:  testServerTLSHandshakeSPIFFE,
+			rootProvider:   makeSPIFFEBundleProvider(t, "spiffe_end2end/client_spiffebundle.json"),
+			san:            defaultTestCertSANSPIFFE,
+			useSPIFFECreds: true,
+			wantErr:        "No bundle found for peer certificates",
 		},
 	}
 
@@ -585,7 +594,7 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			defer cancel()
 			ctx = newTestContextWithHandshakeInfo(ctx, test.rootProvider, nil, test.san)
 			if _, _, err := creds.ClientHandshake(ctx, authority, conn); err == nil || !strings.Contains(err.Error(), test.wantErr) {
-				t.Fatalf("ClientHandshake() returned %q, wantErr %q", err, test.wantErr)
+				t.Fatalf("ClientHandshake() returned %v, wantErr %v", err, test.wantErr)
 			}
 		})
 	}

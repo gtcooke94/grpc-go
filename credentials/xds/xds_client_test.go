@@ -35,6 +35,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	icredentials "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/internal/credentials/spiffe"
 	xdsinternal "google.golang.org/grpc/internal/credentials/xds"
 	"google.golang.org/grpc/internal/grpctest"
 	"google.golang.org/grpc/internal/testutils"
@@ -216,6 +217,14 @@ func makeRootProvider(t *testing.T, caPath string) *fakeProvider {
 	roots := x509.NewCertPool()
 	roots.AppendCertsFromPEM(pemData)
 	return &fakeProvider{km: &certprovider.KeyMaterial{Roots: roots}}
+}
+
+func makeSPIFFEBundleProvider(t *testing.T, spiffeBundlePath string) *fakeProvider {
+	spiffeBundle, err := spiffe.LoadSPIFFEBundleMap(testdata.Path(spiffeBundlePath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &fakeProvider{km: &certprovider.KeyMaterial{SPIFFEBundleMap: spiffeBundle}}
 }
 
 // newTestContextWithHandshakeInfo returns a copy of parent with HandshakeInfo

@@ -240,6 +240,7 @@ func (c *credsImpl) ServerHandshake(rawConn net.Conn) (net.Conn, credentials.Aut
 	}
 	ctx, cancel := context.WithDeadline(context.Background(), deadline)
 	defer cancel()
+	// TODO(gregorycooke)
 	cfg, err := hi.ServerSideTLSConfig(ctx)
 	if err != nil {
 		return nil, nil, err

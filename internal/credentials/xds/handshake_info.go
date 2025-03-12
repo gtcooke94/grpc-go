@@ -139,6 +139,7 @@ func (hi *HandshakeInfo) ClientSideTLSConfig(ctx context.Context) (*tls.Config, 
 		NextProtos:         []string{"h2"},
 	}
 
+	// TODO(gregorycooke) here
 	km, err := rootProv.KeyMaterial(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("xds: fetching trusted roots from CertificateProvider failed: %v", err)
@@ -182,6 +183,7 @@ func (hi *HandshakeInfo) ServerSideTLSConfig(ctx context.Context) (*tls.Config, 
 	cfg.Certificates = km.Certs
 
 	if rootProv != nil {
+		// TODO(gregorycooke) here
 		km, err := rootProv.KeyMaterial(ctx)
 		if err != nil {
 			return nil, fmt.Errorf("xds: fetching trusted roots from CertificateProvider failed: %v", err)

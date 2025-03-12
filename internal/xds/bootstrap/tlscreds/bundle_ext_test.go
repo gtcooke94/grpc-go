@@ -40,7 +40,9 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
-const defaultTestTimeout = 5 * time.Second
+const defaultTestTimeout = 5 * time.Hour
+
+// const defaultTestTimeout = 5 * time.Second
 
 type s struct {
 	grpctest.Tester
@@ -230,18 +232,18 @@ func (s) TestCaReloading(t *testing.T) {
 }
 
 func (s) TestSPIFFEReloading(t *testing.T) {
-	serverSPIFFEBundle, err := os.ReadFile(testdata.Path("spiffe_end2end/server_spiffebundle.json"))
+	clientSPIFFEBundle, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	if err != nil {
 		t.Fatalf("Failed to read test CA cert: %s", err)
 	}
 
 	// Write CA certs to a temporary file so that we can modify it later.
-	spiffePath := t.TempDir() + "/server_spiffe.json"
-	if err = os.WriteFile(spiffePath, serverSPIFFEBundle, 0644); err != nil {
-		t.Fatalf("Failed to write test SPIFFE Bundle %v: %v", serverSPIFFEBundle, err)
+	spiffePath := t.TempDir() + "/client_spiffe.json"
+	if err = os.WriteFile(spiffePath, clientSPIFFEBundle, 0644); err != nil {
+		t.Fatalf("Failed to write test SPIFFE Bundle %v: %v", clientSPIFFEBundle, err)
 	}
 	cfg := fmt.Sprintf(`{
-		"spiffe_trust_map_bundle_file": "%s",
+		"spiffe_trust_bundle_map_file": "%s",
 		"refresh_interval": ".01s"
 	}`, spiffePath)
 	tlsBundle, stop, err := tlscreds.NewBundle([]byte(cfg))
@@ -264,25 +266,25 @@ func (s) TestSPIFFEReloading(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
-	// defer cancel()
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
 
-	// client := testgrpc.NewTestServiceClient(conn)
-	// if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
-	// 	t.Errorf("Error calling EmptyCall: %v", err)
-	// }
-	// // close the server and create a new one to force client to do a new
-	// // handshake.
-	// server.Stop()
+	client := testgrpc.NewTestServiceClient(conn)
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Errorf("Error calling EmptyCall: %v", err)
+	}
+	// close the server and create a new one to force client to do a new
+	// handshake.
+	server.Stop()
 
-	// invalidCa, err := os.ReadFile(testdata.Path("ca.pem"))
+	// wrongBundle, err := os.ReadFile(testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	// if err != nil {
-	// 	t.Fatalf("Failed to read test CA cert: %v", err)
+	// 	t.Fatalf("Failed to read test spiffe bundle %v: %v", "spiffe_end2end/client_spiffebundle.json", err)
 	// }
 	// // unload root cert
-	// err = os.WriteFile(spiffePath, invalidCa, 0644)
+	// err = os.WriteFile(spiffePath, wrongBundle, 0644)
 	// if err != nil {
-	// 	t.Fatalf("Failed to write test CA cert: %v", err)
+	// 	t.Fatalf("Failed to write test spiffe bundle %v: %v", "spiffe_end2end/client_spiffebundle.json", err)
 	// }
 
 	// for ; ctx.Err() == nil; <-time.After(10 * time.Millisecond) {

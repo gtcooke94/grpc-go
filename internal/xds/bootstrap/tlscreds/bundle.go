@@ -64,7 +64,7 @@ func NewBundle(jd json.RawMessage) (credentials.Bundle, func(), error) {
 		}
 	} // Else the config field is absent. Treat it as an empty config.
 
-	if cfg.CACertificateFile == "" && cfg.CertificateFile == "" && cfg.PrivateKeyFile == "" {
+	if cfg.CACertificateFile == "" && cfg.CertificateFile == "" && cfg.PrivateKeyFile == "" && cfg.SPIFFETrustBundleMapFile == "" {
 		// We cannot use (and do not need) a file_watcher provider in this case,
 		// and can simply directly use the TLS transport credentials.
 		// Quoting A65:

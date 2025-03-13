@@ -150,7 +150,7 @@ func (c *reloadingCreds) ServerHandshake(net.Conn) (net.Conn, credentials.AuthIn
 	return nil, nil, errors.New("server handshake is not supported by xDS client TLS credentials")
 }
 
-func buildSPIFFEVerifyFunc(spiffeBundleMap spiffe.SPIFFEBundleMap, peerVerifiedChains [][]*x509.Certificate) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+func buildSPIFFEVerifyFunc(spiffeBundleMap spiffe.BundleMap, peerVerifiedChains [][]*x509.Certificate) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 		// servername?
 		rawCertList := make([]*x509.Certificate, len(rawCerts))

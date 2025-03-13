@@ -24,7 +24,6 @@ package spiffe
 import (
 	"crypto/x509"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 
@@ -33,9 +32,9 @@ import (
 	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
-// SPIFFEBundleMap represents a SPIFFE Bundle Map per the spec
+// BundleMap represents a SPIFFE Bundle Map per the spec
 // https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Trust_Domain_and_Bundle.md#4-spiffe-bundle-format.
-type SPIFFEBundleMap map[string]*spiffebundle.Bundle
+type BundleMap map[string]*spiffebundle.Bundle
 
 type partialParsedSPIFFEBundleMap struct {
 	Bundles map[string]json.RawMessage `json:"trust_domains"`
@@ -47,43 +46,42 @@ type partialParsedSPIFFEBundleMap struct {
 // If duplicate keys are encountered in the JSON parsing, Go's default unmarshal
 // behavior occurs which causes the last processed entry to be the entry in the
 // parsed map.
-func LoadSPIFFEBundleMap(filePath string) (SPIFFEBundleMap, error) {
+func LoadSPIFFEBundleMap(filePath string) (BundleMap, error) {
 	bundleMapRaw, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, err
 	}
-	return SPIFFEBundleMapFromBytes(bundleMapRaw)
+	return BundleMapFromBytes(bundleMapRaw)
 }
 
-// SPIFFEBundleMapFromBytes parses bytes into a SPIFFE Bundle Map. See the
+// BundleMapFromBytes parses bytes into a SPIFFE Bundle Map. See the
 // SPIFFE Bundle Map spec for more detail -
 // https://github.com/spiffe/spiffe/blob/main/standards/SPIFFE_Trust_Domain_and_Bundle.md#4-spiffe-bundle-format
 // If duplicate keys are encountered in the JSON parsing, Go's default unmarshal
 // behavior occurs which causes the last processed entry to be the entry in the
 // parsed map.
-func SPIFFEBundleMapFromBytes(bundleMapBytes []byte) (SPIFFEBundleMap, error) {
+func BundleMapFromBytes(bundleMapBytes []byte) (BundleMap, error) {
 	var result partialParsedSPIFFEBundleMap
 	err := json.Unmarshal(bundleMapBytes, &result)
 	if err != nil {
 		return nil, err
 	}
 	if result.Bundles == nil {
-		return nil, errors.New("no content in spiffe bundle map file")
+		return nil, fmt.Errorf("spiffe: BundleMapFromBytes() no bundles parsed from spiffe bundle map bytes")
 	}
 	bundleMap := map[string]*spiffebundle.Bundle{}
 	for td, jsonBundle := range result.Bundles {
 		trustDomain, err := spiffeid.TrustDomainFromString(td)
 		if err != nil {
-			return nil, fmt.Errorf("invalud trust domain found when parsing map: %v", err)
+			return nil, fmt.Errorf("spiffe: BundleMapFromBytes() invalid trust domain (%v) found when parsing SPIFFE Bundle Map: %v", td, err)
 		}
 		bundle, err := spiffebundle.Parse(trustDomain, jsonBundle)
 		if err != nil {
-			return nil, fmt.Errorf("spiffe: failed to parse bundle for trust domain %v: %v", td, err)
+			return nil, fmt.Errorf("spiffe: BundleMapFromBytes() failed to parse bundle for trust domain %v: %v", td, err)
 		}
 		bundleMap[td] = bundle
 	}
 	return bundleMap, nil
-
 }
 
 // GetRootsFromSPIFFEBundleMap returns the root trust certificates from the

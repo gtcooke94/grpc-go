@@ -86,7 +86,7 @@ func BundleMapFromBytes(bundleMapBytes []byte) (BundleMap, error) {
 
 // GetRootsFromSPIFFEBundleMap returns the root trust certificates from the
 // SPIFFE bundle map for the given trust domain from the leaf certificate.
-func GetRootsFromSPIFFEBundleMap(bundleMap SPIFFEBundleMap, leafCert *x509.Certificate) (*x509.CertPool, error) {
+func GetRootsFromSPIFFEBundleMap(bundleMap BundleMap, leafCert *x509.Certificate) (*x509.CertPool, error) {
 	// 1. Upon receiving a peer certificate, verify that it is a well-formed SPIFFE
 	//    leaf certificate.  In particular, it must have a single URI SAN containing
 	//    a well-formed SPIFFE ID ([SPIFFE ID format]).

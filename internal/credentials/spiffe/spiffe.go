@@ -29,7 +29,6 @@ import (
 
 	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
 	"github.com/spiffe/go-spiffe/v2/spiffeid"
-	credinternal "google.golang.org/grpc/internal/credentials"
 )
 
 // BundleMap represents a SPIFFE Bundle Map per the spec
@@ -90,17 +89,18 @@ func GetRootsFromSPIFFEBundleMap(bundleMap BundleMap, leafCert *x509.Certificate
 	// 1. Upon receiving a peer certificate, verify that it is a well-formed SPIFFE
 	//    leaf certificate.  In particular, it must have a single URI SAN containing
 	//    a well-formed SPIFFE ID ([SPIFFE ID format]).
-	spiffeId := credinternal.SPIFFEIDFromCert(leafCert)
-	if spiffeId == nil {
-		return nil, fmt.Errorf("credinternal.SPIFFEIDFromCert(leafCert) = nil, failed to parse a SPIFFE id")
+	// spiffeId := credinternal.SPIFFEIDFromCert(leafCert)
+	spiffeId, err := IDFromCert(leafCert)
+	if err != nil {
+		return nil, err
 	}
 
 	// 2. Use the trust domain in the peer certificate's SPIFFE ID to lookup
 	//    the SPIFFE trust bundle. If the trust domain is not contained in the
 	//    configured trust map, reject the certificate.
-	spiffeBundle, ok := bundleMap[spiffeId.Host]
+	spiffeBundle, ok := bundleMap[spiffeId.TrustDomain().Name()]
 	if !ok {
-		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() failed. No bundle found for peer certificates trust domain %v", spiffeId.Host)
+		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() failed. No bundle found for peer certificates trust domain %v", spiffeId.TrustDomain().Name())
 	}
 	roots := spiffeBundle.X509Authorities()
 	rootPool := x509.NewCertPool()
@@ -108,4 +108,28 @@ func GetRootsFromSPIFFEBundleMap(bundleMap BundleMap, leafCert *x509.Certificate
 		rootPool.AddCert(root)
 	}
 	return rootPool, nil
+}
+
+// IDFromCert parses the SPIFFE ID from x509.Certificate. If the SPIFFE
+// ID format is invalid, return nil with warning.
+func IDFromCert(cert *x509.Certificate) (*spiffeid.ID, error) {
+	// return spiffeid.FromURI(cert.URIs)
+	if cert == nil {
+		return nil, fmt.Errorf("spiffe: IDFromCert() failed because input cert is nil")
+	}
+	if cert.URIs == nil {
+		return nil, fmt.Errorf("spiffe: IDFromCert() failed because input cert has no URIs")
+	}
+	var spiffeID *spiffeid.ID
+	for _, uri := range cert.URIs {
+		if uri == nil || uri.Scheme != "spiffe" || uri.Opaque != "" || (uri.User != nil && uri.User.Username() != "") {
+			continue
+		}
+		ID, err := spiffeid.FromURI(uri)
+		if err != nil {
+			return nil, fmt.Errorf("spiffe: IDFromCert() failed with invalid spiffeid: %v", err)
+		}
+		spiffeID = &ID
+	}
+	return spiffeID, nil
 }

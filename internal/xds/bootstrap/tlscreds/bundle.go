@@ -75,8 +75,7 @@ func NewBundle(jd json.RawMessage) (credentials.Bundle, func(), error) {
 		// > configuration, it is acceptable to specify neither one.
 		// Further, with the introduction of SPIFFE Trust Map support, we also
 		// check for this value.
-		return &bundle{transportCredentials: credentials.NewTLS(&tls.Config{})},
-			func() {}, nil
+		return &bundle{transportCredentials: credentials.NewTLS(&tls.Config{})}, func() {}, nil
 	}
 	// Otherwise we need to use a file_watcher provider to watch the CA,
 	// private and public keys.
@@ -127,6 +126,7 @@ func (c *reloadingCreds) ClientHandshake(ctx context.Context, authority string, 
 		config = &tls.Config{
 			InsecureSkipVerify:    true,
 			VerifyPeerCertificate: buildSPIFFEVerifyFunc(km.SPIFFEBundleMap, peerVerifiedChains),
+			Certificates:          km.Certs,
 		}
 	} else {
 		config = &tls.Config{

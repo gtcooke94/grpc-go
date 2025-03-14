@@ -371,3 +371,37 @@ func (s) TestMTLSSPIFFE(t *testing.T) {
 		t.Errorf("EmptyCall(): got error %v when expected to succeed", err)
 	}
 }
+
+func (s) TestMTLSSPIFFEFailure(t *testing.T) {
+	s := stubserver.StartTestService(t, nil, grpc.Creds(testutils.CreateServerTLSCredentialsSPIFFE(t, tls.RequireAndVerifyClientCert)))
+	defer s.Stop()
+
+	cfg := fmt.Sprintf(`{
+		"certificate_file": "%s",
+		"private_key_file": "%s",
+		"spiffe_trust_bundle_map_file": "%s"
+	}`,
+		testdata.Path("spiffe_end2end/client_spiffe.pem"),
+		testdata.Path("spiffe_end2end/client.key"),
+		testdata.Path("spiffe_end2end/server_spiffebundle.json"))
+	tlsBundle, stop, err := tlscreds.NewBundle([]byte(cfg))
+	if err != nil {
+		t.Fatalf("Failed to create TLS bundle: %v", err)
+	}
+	defer stop()
+	conn, err := grpc.NewClient(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
+	if err != nil {
+		t.Fatalf("Error dialing: %v", err)
+	}
+	defer conn.Close()
+	client := testgrpc.NewTestServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err == nil {
+		t.Errorf("EmptyCall(): got success. want failure")
+	}
+	wantErr := "spiffe: no bundle found for peer certificates"
+	if !strings.Contains(err.Error(), wantErr) {
+		t.Errorf("EmptyCall(): failed with wrong error. got %v. want contains: %v", err, wantErr)
+	}
+}

@@ -92,7 +92,7 @@ func GetRootsFromSPIFFEBundleMap(bundleMap BundleMap, leafCert *x509.Certificate
 	// spiffeId := credinternal.SPIFFEIDFromCert(leafCert)
 	spiffeId, err := IDFromCert(leafCert)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("spiffe: could not get spiffe ID from peer leaf cert but verification with spiffe trust map was configured: %v", err)
 	}
 
 	// 2. Use the trust domain in the peer certificate's SPIFFE ID to lookup
@@ -100,7 +100,7 @@ func GetRootsFromSPIFFEBundleMap(bundleMap BundleMap, leafCert *x509.Certificate
 	//    configured trust map, reject the certificate.
 	spiffeBundle, ok := bundleMap[spiffeId.TrustDomain().Name()]
 	if !ok {
-		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() failed. No bundle found for peer certificates trust domain %v", spiffeId.TrustDomain().Name())
+		return nil, fmt.Errorf("spiffe: no bundle found for peer certificates trust domain %v but verification with a SPIFFE trust map was configured", spiffeId.TrustDomain().Name())
 	}
 	roots := spiffeBundle.X509Authorities()
 	rootPool := x509.NewCertPool()

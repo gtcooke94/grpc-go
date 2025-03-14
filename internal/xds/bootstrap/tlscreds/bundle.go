@@ -73,7 +73,10 @@ func NewBundle(jd json.RawMessage) (credentials.Bundle, func(), error) {
 		// > provider, at least one of the "certificate_file" or
 		// > "ca_certificate_file" fields must be specified, whereas in this
 		// > configuration, it is acceptable to specify neither one.
-		return &bundle{transportCredentials: credentials.NewTLS(&tls.Config{})}, func() {}, nil
+		// Further, with the introduction of SPIFFE Trust Map support, we also
+		// check for this value.
+		return &bundle{transportCredentials: credentials.NewTLS(&tls.Config{})},
+			func() {}, nil
 	}
 	// Otherwise we need to use a file_watcher provider to watch the CA,
 	// private and public keys.

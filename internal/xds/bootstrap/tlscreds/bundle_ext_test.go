@@ -40,7 +40,7 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
-// const defaultTestTimeout = 5 * time.Hour
+// const defaultTestTimeout = 5 * time.Second
 
 const defaultTestTimeout = 5 * time.Second
 
@@ -298,7 +298,7 @@ func (s) TestSPIFFEReloading(t *testing.T) {
 		// reloaded, and thus the server cert is signed by an unknown CA.
 		t.Log(server)
 		_, err = client.EmptyCall(ctx, &testpb.Empty{})
-		const wantErr = "No bundle found for peer certificates trust domain"
+		const wantErr = "no bundle found for peer certificates trust domain"
 		if status.Code(err) == codes.Unavailable && strings.Contains(err.Error(), wantErr) {
 			// Certs have reloaded.
 			server.Stop()
@@ -324,6 +324,36 @@ func (s) TestMTLS(t *testing.T) {
 		testdata.Path("x509/server_ca_cert.pem"),
 		testdata.Path("x509/client1_cert.pem"),
 		testdata.Path("x509/client1_key.pem"))
+	tlsBundle, stop, err := tlscreds.NewBundle([]byte(cfg))
+	if err != nil {
+		t.Fatalf("Failed to create TLS bundle: %v", err)
+	}
+	defer stop()
+	conn, err := grpc.NewClient(s.Address, grpc.WithCredentialsBundle(tlsBundle), grpc.WithAuthority("x.test.example.com"))
+	if err != nil {
+		t.Fatalf("Error dialing: %v", err)
+	}
+	defer conn.Close()
+	client := testgrpc.NewTestServiceClient(conn)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	if _, err = client.EmptyCall(ctx, &testpb.Empty{}); err != nil {
+		t.Errorf("EmptyCall(): got error %v when expected to succeed", err)
+	}
+}
+
+func (s) TestMTLSSPIFFE(t *testing.T) {
+	s := stubserver.StartTestService(t, nil, grpc.Creds(testutils.CreateServerTLSCredentialsSPIFFE(t, tls.RequireAndVerifyClientCert)))
+	defer s.Stop()
+
+	cfg := fmt.Sprintf(`{
+		"certificate_file": "%s",
+		"private_key_file": "%s",
+		"spiffe_trust_bundle_map_file": "%s"
+	}`,
+		testdata.Path("spiffe_end2end/client_spiffe.pem"),
+		testdata.Path("spiffe_end2end/client.key"),
+		testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	tlsBundle, stop, err := tlscreds.NewBundle([]byte(cfg))
 	if err != nil {
 		t.Fatalf("Failed to create TLS bundle: %v", err)

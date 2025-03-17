@@ -63,11 +63,13 @@ func (s) TestFailingProvider(t *testing.T) {
 	cfg := fmt.Sprintf(`{
                "ca_certificate_file": "%s",
                "certificate_file": "%s",
-               "private_key_file": "%s"
+               "private_key_file": "%s",
+			   "spiffe_trust_bundle_map_file": "%s"
        }`,
 		testdata.Path("x509/server_ca_cert.pem"),
 		testdata.Path("x509/client1_cert.pem"),
-		testdata.Path("x509/client1_key.pem"))
+		testdata.Path("x509/client1_key.pem"),
+		testdata.Path("spiffe_end2end/client_spiffebundle.json"))
 	tlsBundle, stop, err := NewBundle([]byte(cfg))
 	if err != nil {
 		t.Fatalf("Failed to create TLS bundle: %v", err)

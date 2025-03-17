@@ -23,6 +23,7 @@ import (
 	"encoding/pem"
 	"io"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
@@ -118,5 +119,63 @@ func TestLoadSPIFFEBundleMapX509Failures(t *testing.T) {
 	}
 	if len(bundle["example.com"].X509Authorities()) != 0 {
 		t.Fatalf("LoadSPIFFEBundleMap(%v) did not have empty bundle but should have.", filePath)
+	}
+}
+
+func TestGetRootsFromSPIFFEBundleMapSuccess(t *testing.T) {
+	bundleMapFile := testdata.Path("spiffe/spiffebundle_match_client_spiffe.json")
+	bundle, err := LoadSPIFFEBundleMap(bundleMapFile)
+	if err != nil {
+		t.Fatalf("LoadSPIFFEBundleMap(%v) failed with error: %v", bundleMapFile, err)
+	}
+
+	cert := loadX509Cert(t, testdata.Path("spiffe/client_spiffe.pem"))
+	rootCerts, err := GetRootsFromSPIFFEBundleMap(bundle, cert)
+	if err != nil {
+		t.Fatalf("GetRootsFromSPIFFEBundleMap() failed with err %v", err)
+	}
+	wantRoot := loadX509Cert(t, testdata.Path("spiffe/spiffe_cert.pem"))
+	wantPool := x509.NewCertPool()
+	wantPool.AddCert(wantRoot)
+	if !rootCerts.Equal(wantPool) {
+		t.Fatalf("GetRootsFromSPIFFEBundleMap() got %v want %v", rootCerts, wantPool)
+	}
+}
+
+func TestGetRootsFromSPIFFEBundleMapFailures(t *testing.T) {
+	tests := []struct {
+		name          string
+		bundleMapFile string
+		leafCertFile  string
+		wantErr       string
+	}{
+		{
+			name:          "No bundle for peer cert spiffeID",
+			bundleMapFile: testdata.Path("spiffe/spiffebundle.json"),
+			leafCertFile:  testdata.Path("spiffe/client_spiffe.pem"),
+			wantErr:       "No bundle found for peer certificates",
+		},
+		{
+			name:          "cert has invalid SPIFFE id",
+			bundleMapFile: testdata.Path("spiffe/spiffebundle.json"),
+			leafCertFile:  testdata.Path("ca.pem"),
+			wantErr:       "failed to parse a SPIFFE id",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			bundle, err := LoadSPIFFEBundleMap(tc.bundleMapFile)
+			if err != nil {
+				t.Fatalf("LoadSPIFFEBundleMap(%v) failed with error: %v", tc.bundleMapFile, err)
+			}
+			cert := loadX509Cert(t, tc.leafCertFile)
+			_, err = GetRootsFromSPIFFEBundleMap(bundle, cert)
+			if err == nil {
+				t.Fatalf("GetRootsFromSPIFFEBundleMap() want err got none")
+			}
+			if !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("GetRootsFromSPIFFEBundleMap() want err to contain %v. got %v", tc.wantErr, err)
+			}
+		})
 	}
 }

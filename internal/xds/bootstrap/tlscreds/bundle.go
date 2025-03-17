@@ -155,7 +155,6 @@ func (c *reloadingCreds) ServerHandshake(net.Conn) (net.Conn, credentials.AuthIn
 
 func buildSPIFFEVerifyFunc(spiffeBundleMap spiffe.BundleMap, peerVerifiedChains [][]*x509.Certificate) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
 	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-		// servername?
 		rawCertList := make([]*x509.Certificate, len(rawCerts))
 		for i, asn1Data := range rawCerts {
 			cert, err := x509.ParseCertificate(asn1Data)

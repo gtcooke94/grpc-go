@@ -122,9 +122,6 @@ func IDFromCert(cert *x509.Certificate) (*spiffeid.ID, error) {
 	}
 	var spiffeID *spiffeid.ID
 	for _, uri := range cert.URIs {
-		if uri == nil || uri.Scheme != "spiffe" || uri.Opaque != "" || (uri.User != nil && uri.User.Username() != "") {
-			continue
-		}
 		ID, err := spiffeid.FromURI(uri)
 		if err != nil {
 			return nil, fmt.Errorf("spiffe: IDFromCert() failed with invalid spiffeid: %v", err)

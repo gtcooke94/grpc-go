@@ -40,8 +40,6 @@ import (
 	"google.golang.org/grpc/testdata"
 )
 
-// const defaultTestTimeout = 5 * time.Hour
-
 const defaultTestTimeout = 5 * time.Second
 
 type s struct {

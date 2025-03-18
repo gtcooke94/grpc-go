@@ -7,8 +7,14 @@
 *   spiffe-openssl.cnf - the configuration file passed to the openssl CLI when
     creating these certificate files
 *   spiffebundle.json - the valid spiffe bundle for happy path testing
+*   spiffebundle2.json - Another valid spiffe bundle that is used in testing
+    file reloading (a different file is needed to ensure changes are picked up).
+    It is just the `example.com` trust domain from spiffebundle.json.
 *   spiffebundle_corrupted_cert.json - manually modifies the `x5c` field and
     removes a character to create an invalid certificate
+*   spiffebundle_empty_keys.json - the `keys` field is an empty array
+*   spiffebundle_empty_string_keys.json - the `keys` field contains an entry
+*   with an empty string key
 *   spiffebundle_invalid_trustdomain - uses a `#` in the trust domain which is a
     disallowed character per the spec
 *   spiffebundle_malformed.json - a fully wrong json

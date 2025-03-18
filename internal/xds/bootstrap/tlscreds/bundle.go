@@ -31,6 +31,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spiffe/go-spiffe/v2/bundle/spiffebundle"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	"google.golang.org/grpc/credentials/tls/certprovider/pemfile"
@@ -73,6 +74,8 @@ func NewBundle(jd json.RawMessage) (credentials.Bundle, func(), error) {
 		// > provider, at least one of the "certificate_file" or
 		// > "ca_certificate_file" fields must be specified, whereas in this
 		// > configuration, it is acceptable to specify neither one.
+		// Further, with the introduction of SPIFFE Trust Map support, we also
+		// check for this value.
 		return &bundle{transportCredentials: credentials.NewTLS(&tls.Config{})}, func() {}, nil
 	}
 	// Otherwise we need to use a file_watcher provider to watch the CA,
@@ -120,10 +123,10 @@ func (c *reloadingCreds) ClientHandshake(ctx context.Context, authority string, 
 	}
 	var config *tls.Config
 	if km.SPIFFEBundleMap != nil {
-		var peerVerifiedChains [][]*x509.Certificate
 		config = &tls.Config{
 			InsecureSkipVerify:    true,
-			VerifyPeerCertificate: buildSPIFFEVerifyFunc(km.SPIFFEBundleMap, peerVerifiedChains),
+			VerifyPeerCertificate: buildSPIFFEVerifyFunc(km.SPIFFEBundleMap),
+			Certificates:          km.Certs,
 		}
 	} else {
 		config = &tls.Config{
@@ -150,16 +153,18 @@ func (c *reloadingCreds) ServerHandshake(net.Conn) (net.Conn, credentials.AuthIn
 	return nil, nil, errors.New("server handshake is not supported by xDS client TLS credentials")
 }
 
-func buildSPIFFEVerifyFunc(spiffeBundleMap spiffe.BundleMap, peerVerifiedChains [][]*x509.Certificate) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-	return func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
-		// servername?
+func buildSPIFFEVerifyFunc(spiffeBundleMap map[string]*spiffebundle.Bundle) func(rawCerts [][]byte, verifiedChains [][]*x509.Certificate) error {
+	return func(rawCerts [][]byte, _ [][]*x509.Certificate) error {
 		rawCertList := make([]*x509.Certificate, len(rawCerts))
 		for i, asn1Data := range rawCerts {
 			cert, err := x509.ParseCertificate(asn1Data)
 			if err != nil {
-				return err
+				return fmt.Errorf("spiffe: verify function could not parse input certificate: %v", err)
 			}
 			rawCertList[i] = cert
+		}
+		if !(len(rawCertList) > 0) {
+			return fmt.Errorf("spiffe: verify function has no valid input certificates")
 		}
 		leafCert := rawCertList[0]
 		roots, err := spiffe.GetRootsFromSPIFFEBundleMap(spiffeBundleMap, leafCert)
@@ -176,11 +181,11 @@ func buildSPIFFEVerifyFunc(spiffeBundleMap spiffe.BundleMap, peerVerifiedChains 
 		for _, cert := range rawCertList[1:] {
 			opts.Intermediates.AddCert(cert)
 		}
-		chains, err := rawCertList[0].Verify(opts)
+		// The verified chain is (surprisingly) unused
+		_, err = rawCertList[0].Verify(opts)
 		if err != nil {
-			return err
+			return fmt.Errorf("spiffe: x509 certificate Verify failed: %v", err)
 		}
-		peerVerifiedChains = chains
 		return nil
 	}
 }

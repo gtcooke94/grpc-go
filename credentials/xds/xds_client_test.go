@@ -47,13 +47,11 @@ import (
 )
 
 const (
-	defaultTestTimeout      = 1 * time.Second
-	defaultTestShortTimeout = 10 * time.Millisecond
-	// defaultTestTimeout       = 1 * time.Hour
-	// defaultTestShortTimeout  = 10 * time.Hour
+	authority                = "authority"
 	defaultTestCertSAN       = "abc.test.example.com"
 	defaultTestCertSANSPIFFE = "spiffe://foo.bar.com/9eebccd2-12bf-40a6-b262-65fe0487d453"
-	authority                = "authority"
+	defaultTestShortTimeout  = 10 * time.Millisecond
+	defaultTestTimeout       = 1 * time.Second
 )
 
 type s struct {

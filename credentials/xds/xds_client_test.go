@@ -32,6 +32,7 @@ import (
 	"time"
 	"unsafe"
 
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	icredentials "google.golang.org/grpc/internal/credentials"
@@ -41,6 +42,7 @@ import (
 	"google.golang.org/grpc/internal/testutils"
 	"google.golang.org/grpc/internal/xds/matcher"
 	"google.golang.org/grpc/resolver"
+	"google.golang.org/grpc/status"
 	"google.golang.org/grpc/testdata"
 )
 
@@ -272,7 +274,11 @@ func makeRootProvider(t *testing.T, caPath string) *fakeProvider {
 }
 
 func makeSPIFFEBundleProvider(t *testing.T, spiffeBundlePath string) *fakeProvider {
-	spiffeBundle, err := spiffe.LoadSPIFFEBundleMap(testdata.Path(spiffeBundlePath))
+	bytes, err := os.ReadFile(testdata.Path(spiffeBundlePath))
+	if err != nil {
+		t.Fatal(err)
+	}
+	spiffeBundle, err := spiffe.BundleMapFromBytes(bytes)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -541,6 +547,7 @@ func (s) TestClientCredsHandshakeTimeout(t *testing.T) {
 
 // TestClientCredsHandshakeFailure verifies different handshake failure cases.
 func (s) TestClientCredsHandshakeFailure(t *testing.T) {
+	const wantErrCode = codes.Unknown
 	tests := []struct {
 		desc           string
 		handshakeFunc  testHandshakeFunc
@@ -569,7 +576,7 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			rootProvider:   makeSPIFFEBundleProvider(t, "spiffe_end2end/client_spiffebundle.json"),
 			san:            defaultTestCertSANSPIFFE,
 			useSPIFFECreds: true,
-			wantErr:        "No bundle found for peer certificates",
+			wantErr:        "no bundle found for peer certificates",
 		},
 	}
 
@@ -593,8 +600,15 @@ func (s) TestClientCredsHandshakeFailure(t *testing.T) {
 			ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
 			defer cancel()
 			ctx = newTestContextWithHandshakeInfo(ctx, test.rootProvider, nil, test.san)
-			if _, _, err := creds.ClientHandshake(ctx, authority, conn); err == nil || !strings.Contains(err.Error(), test.wantErr) {
-				t.Fatalf("ClientHandshake() returned %v, wantErr %v", err, test.wantErr)
+			_, _, err = creds.ClientHandshake(ctx, authority, conn)
+			if err == nil {
+				t.Fatalf("ClientHandshake() got no error, want error to contain %v", test.wantErr)
+			}
+			if !strings.Contains(err.Error(), test.wantErr) {
+				t.Fatalf("ClientHandshake() got error %v, want error to contain %v", err, test.wantErr)
+			}
+			if status.Code(err) != wantErrCode {
+				t.Fatalf("ClientHandshake() got error code %v, want error code %v", status.Code(err), wantErrCode)
 			}
 		})
 	}

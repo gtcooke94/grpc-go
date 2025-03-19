@@ -387,10 +387,10 @@ func (s) TestServerCredsHandshakeFailureSPIFFE(t *testing.T) {
 		if err == nil {
 			return handshakeResult{err: errors.New("ServerHandshake() succeeded when expected to fail")}
 		}
-		expectedErrorContains := "No bundle found for peer certificate"
-		if !strings.Contains(err.Error(), expectedErrorContains) {
-			t.Fatalf("ServerHandshake() failed with wrong error. got: %v want: contains %v", err, expectedErrorContains)
-			return handshakeResult{err: fmt.Errorf("ServerHandshake() failed with wrong error. got: %v want: contains %v", err, expectedErrorContains)}
+		wantErrContains := "no bundle found for peer certificates trust domain"
+		if !strings.Contains(err.Error(), wantErrContains) {
+			t.Errorf("ServerHandshake() failed with wrong error. got: %v want: contains %v", err, wantErrContains)
+			return handshakeResult{err: fmt.Errorf("ServerHandshake() failed with wrong error. got: %v want: contains %v", err, wantErrContains)}
 		}
 		return handshakeResult{}
 	})

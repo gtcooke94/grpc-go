@@ -420,12 +420,18 @@ func (s) TestEnd2End(t *testing.T) {
 }
 
 type tmpCredsFiles struct {
-	clientCertTmp  *os.File
-	clientKeyTmp   *os.File
-	clientTrustTmp *os.File
-	serverCertTmp  *os.File
-	serverKeyTmp   *os.File
-	serverTrustTmp *os.File
+	clientCertTmp         *os.File
+	clientKeyTmp          *os.File
+	clientTrustTmp        *os.File
+	serverCertTmp         *os.File
+	serverKeyTmp          *os.File
+	serverTrustTmp        *os.File
+	clientSPIFFECertTmp   *os.File
+	clientSPIFFEKeyTmp    *os.File
+	clientSPIFFEBundleTmp *os.File
+	serverSPIFFECertTmp   *os.File
+	serverSPIFFEKeyTmp    *os.File
+	serverSPIFFEBundleTmp *os.File
 }
 
 // Create temp files that are used to hold credentials.
@@ -456,6 +462,30 @@ func createTmpFiles() (*tmpCredsFiles, error) {
 	if err != nil {
 		return nil, err
 	}
+	tmpFiles.clientSPIFFECertTmp, err = os.CreateTemp(os.TempDir(), "pre-")
+	if err != nil {
+		return nil, err
+	}
+	tmpFiles.clientSPIFFEKeyTmp, err = os.CreateTemp(os.TempDir(), "pre-")
+	if err != nil {
+		return nil, err
+	}
+	tmpFiles.clientSPIFFEBundleTmp, err = os.CreateTemp(os.TempDir(), "pre-")
+	if err != nil {
+		return nil, err
+	}
+	tmpFiles.serverSPIFFECertTmp, err = os.CreateTemp(os.TempDir(), "pre-")
+	if err != nil {
+		return nil, err
+	}
+	tmpFiles.serverSPIFFEKeyTmp, err = os.CreateTemp(os.TempDir(), "pre-")
+	if err != nil {
+		return nil, err
+	}
+	tmpFiles.serverSPIFFEBundleTmp, err = os.CreateTemp(os.TempDir(), "pre-")
+	if err != nil {
+		return nil, err
+	}
 	return tmpFiles, nil
 }
 
@@ -479,6 +509,24 @@ func (tmpFiles *tmpCredsFiles) copyCredsToTmpFiles() error {
 	if err := copyFileContents(testdata.Path("server_trust_cert_1.pem"), tmpFiles.serverTrustTmp.Name()); err != nil {
 		return err
 	}
+	if err := copyFileContents(testdata.Path("spiffe/client_spiffe.pem"), tmpFiles.clientSPIFFECertTmp.Name()); err != nil {
+		return err
+	}
+	if err := copyFileContents(testdata.Path("spiffe/client.key"), tmpFiles.clientSPIFFEKeyTmp.Name()); err != nil {
+		return err
+	}
+	if err := copyFileContents(testdata.Path("spiffe/client_spiffebundle.json"), tmpFiles.clientSPIFFEBundleTmp.Name()); err != nil {
+		return err
+	}
+	if err := copyFileContents(testdata.Path("spiffe/server_spiffe.pem"), tmpFiles.serverSPIFFECertTmp.Name()); err != nil {
+		return err
+	}
+	if err := copyFileContents(testdata.Path("spiffe/server.key"), tmpFiles.serverSPIFFEKeyTmp.Name()); err != nil {
+		return err
+	}
+	if err := copyFileContents(testdata.Path("spiffe/server_spiffebundle.json"), tmpFiles.serverSPIFFEBundleTmp.Name()); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -489,6 +537,12 @@ func (tmpFiles *tmpCredsFiles) removeFiles() {
 	os.Remove(tmpFiles.serverCertTmp.Name())
 	os.Remove(tmpFiles.serverKeyTmp.Name())
 	os.Remove(tmpFiles.serverTrustTmp.Name())
+	os.Remove(tmpFiles.clientSPIFFECertTmp.Name())
+	os.Remove(tmpFiles.clientSPIFFEKeyTmp.Name())
+	os.Remove(tmpFiles.clientSPIFFEBundleTmp.Name())
+	os.Remove(tmpFiles.serverSPIFFECertTmp.Name())
+	os.Remove(tmpFiles.serverSPIFFEKeyTmp.Name())
+	os.Remove(tmpFiles.serverSPIFFEBundleTmp.Name())
 }
 
 func copyFileContents(sourceFile, destinationFile string) error {
@@ -505,7 +559,7 @@ func copyFileContents(sourceFile, destinationFile string) error {
 
 // Create PEMFileProvider(s) watching the content changes of temporary
 // files.
-func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovider.Provider, certprovider.Provider, certprovider.Provider, error) {
+func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovider.Provider, certprovider.Provider, certprovider.Provider, certprovider.Provider, certprovider.Provider, certprovider.Provider, certprovider.Provider, error) {
 	clientIdentityOptions := pemfile.Options{
 		CertFile:        tmpFiles.clientCertTmp.Name(),
 		KeyFile:         tmpFiles.clientKeyTmp.Name(),
@@ -513,7 +567,7 @@ func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovid
 	}
 	clientIdentityProvider, err := pemfile.NewProvider(clientIdentityOptions)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 	clientRootOptions := pemfile.Options{
 		RootFile:        tmpFiles.clientTrustTmp.Name(),
@@ -521,7 +575,7 @@ func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovid
 	}
 	clientRootProvider, err := pemfile.NewProvider(clientRootOptions)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 	serverIdentityOptions := pemfile.Options{
 		CertFile:        tmpFiles.serverCertTmp.Name(),
@@ -530,7 +584,7 @@ func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovid
 	}
 	serverIdentityProvider, err := pemfile.NewProvider(serverIdentityOptions)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
 	serverRootOptions := pemfile.Options{
 		RootFile:        tmpFiles.serverTrustTmp.Name(),
@@ -538,9 +592,43 @@ func createProviders(tmpFiles *tmpCredsFiles) (certprovider.Provider, certprovid
 	}
 	serverRootProvider, err := pemfile.NewProvider(serverRootOptions)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, nil, nil, nil, err
 	}
-	return clientIdentityProvider, clientRootProvider, serverIdentityProvider, serverRootProvider, nil
+	clientSPIFFEIdentityOptions := pemfile.Options{
+		CertFile:        tmpFiles.clientSPIFFECertTmp.Name(),
+		KeyFile:         tmpFiles.clientSPIFFEKeyTmp.Name(),
+		RefreshDuration: credRefreshingInterval,
+	}
+	clientSPIFFEIdentityProvider, err := pemfile.NewProvider(clientSPIFFEIdentityOptions)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, nil, err
+	}
+	clientSPIFFERootOptions := pemfile.Options{
+		SPIFFEBundleMapFile: tmpFiles.clientSPIFFEBundleTmp.Name(),
+		RefreshDuration:     credRefreshingInterval,
+	}
+	clientSPIFFERootProvider, err := pemfile.NewProvider(clientSPIFFERootOptions)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, nil, err
+	}
+	serverSPIFFEIdentityOptions := pemfile.Options{
+		CertFile:        tmpFiles.serverSPIFFECertTmp.Name(),
+		KeyFile:         tmpFiles.serverSPIFFEKeyTmp.Name(),
+		RefreshDuration: credRefreshingInterval,
+	}
+	serverSPIFFEIdentityProvider, err := pemfile.NewProvider(serverSPIFFEIdentityOptions)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, nil, err
+	}
+	serverSPIFFERootOptions := pemfile.Options{
+		SPIFFEBundleMapFile: tmpFiles.serverSPIFFEBundleTmp.Name(),
+		RefreshDuration:     credRefreshingInterval,
+	}
+	serverSPIFFERootProvider, err := pemfile.NewProvider(serverSPIFFERootOptions)
+	if err != nil {
+		return nil, nil, nil, nil, nil, nil, nil, nil, err
+	}
+	return clientIdentityProvider, clientRootProvider, serverIdentityProvider, serverRootProvider, clientSPIFFEIdentityProvider, clientSPIFFERootProvider, serverSPIFFEIdentityProvider, serverSPIFFERootProvider, nil
 }
 
 // In order to test advanced TLS provider features, we used temporary files to
@@ -616,7 +704,7 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			if err := tmpFiles.copyCredsToTmpFiles(); err != nil {
 				t.Fatalf("tmpFiles.copyCredsToTmpFiles() failed, error: %v", err)
 			}
-			clientIdentityProvider, clientRootProvider, serverIdentityProvider, serverRootProvider, err := createProviders(tmpFiles)
+			clientIdentityProvider, clientRootProvider, serverIdentityProvider, serverRootProvider, clientIdentitySPIFFEProvider, clientRootSPIFFEProvider, serverIdentitySPIFFEProvider, serverRootSPIFFEProvider, err := createProviders(tmpFiles)
 			if err != nil {
 				t.Fatalf("createProviders(%v) failed, error: %v", tmpFiles, err)
 			}
@@ -624,6 +712,10 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			defer clientRootProvider.Close()
 			defer serverIdentityProvider.Close()
 			defer serverRootProvider.Close()
+			defer clientIdentitySPIFFEProvider.Close()
+			defer clientRootSPIFFEProvider.Close()
+			defer serverIdentitySPIFFEProvider.Close()
+			defer serverRootSPIFFEProvider.Close()
 			// Start a server and create a client using advancedtls API with Provider.
 			serverOptions := &Options{
 				IdentityOptions: IdentityCertificateOptions{
@@ -721,6 +813,139 @@ func (s) TestPEMFileProviderEnd2End(t *testing.T) {
 			defer conn4.Close()
 		})
 	}
+}
+
+// In order to test advanced TLS provider features, we used temporary files to
+// hold credential data, and copy the contents under testdata/ to these tmp
+// files.
+// Initially, we establish a good connection with providers watching contents
+// from tmp files.
+// Next, we change the identity certs that IdentityProvider is watching. Since
+// the identity key is not changed, the IdentityProvider should ignore the
+// update, and the connection should still be good.
+// Then the identity key is changed. This time IdentityProvider should pick
+// up the update, and the connection should fail, due to the trust certs on the
+// other side is not changed.
+// Finally, the SPIFFE Bundle that other-side's RootProvider is watching get
+// changed. The connection should go back to normal again.
+func (s) TestPEMFileProviderSPIFFEEnd2End(t *testing.T) {
+	tmpFiles, err := createTmpFiles()
+	if err != nil {
+		t.Fatalf("createTmpFiles() failed, error: %v", err)
+	}
+	defer tmpFiles.removeFiles()
+	if err := tmpFiles.copyCredsToTmpFiles(); err != nil {
+		t.Fatalf("tmpFiles.copyCredsToTmpFiles() failed, error: %v", err)
+	}
+	clientIdentityProvider, clientRootProvider, serverIdentityProvider, serverRootProvider, clientIdentitySPIFFEProvider, clientRootSPIFFEProvider, serverIdentitySPIFFEProvider, serverRootSPIFFEProvider, err := createProviders(tmpFiles)
+	if err != nil {
+		t.Fatalf("createProviders(%v) failed, error: %v", tmpFiles, err)
+	}
+	defer clientIdentityProvider.Close()
+	defer clientRootProvider.Close()
+	defer serverIdentityProvider.Close()
+	defer serverRootProvider.Close()
+	defer clientIdentitySPIFFEProvider.Close()
+	defer clientRootSPIFFEProvider.Close()
+	defer serverIdentitySPIFFEProvider.Close()
+	defer serverRootSPIFFEProvider.Close()
+	// Start a server and create a client using advancedtls API with Provider.
+	serverOptions := &Options{
+		IdentityOptions: IdentityCertificateOptions{
+			IdentityProvider: serverIdentitySPIFFEProvider,
+		},
+		RootOptions: RootCertificateOptions{
+			RootProvider: serverRootSPIFFEProvider,
+		},
+		RequireClientCert: true,
+		AdditionalPeerVerification: func(*HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			return &PostHandshakeVerificationResults{}, nil
+		},
+		VerificationType: CertVerification,
+	}
+	serverTLSCreds, err := NewServerCreds(serverOptions)
+	if err != nil {
+		t.Fatalf("failed to create server creds: %v", err)
+	}
+	s := grpc.NewServer(grpc.Creds(serverTLSCreds))
+	defer s.Stop()
+	lis, err := net.Listen("tcp", "localhost:0")
+	if err != nil {
+		t.Fatalf("failed to listen: %v", err)
+	}
+	defer lis.Close()
+	addr := fmt.Sprintf("localhost:%v", lis.Addr().(*net.TCPAddr).Port)
+	pb.RegisterGreeterServer(s, greeterServer{})
+	go s.Serve(lis)
+	clientOptions := &Options{
+		IdentityOptions: IdentityCertificateOptions{
+			IdentityProvider: clientIdentitySPIFFEProvider,
+		},
+		AdditionalPeerVerification: func(*HandshakeVerificationInfo) (*PostHandshakeVerificationResults, error) {
+			return &PostHandshakeVerificationResults{}, nil
+		},
+		RootOptions: RootCertificateOptions{
+			RootProvider: clientRootSPIFFEProvider,
+		},
+		VerificationType: CertVerification,
+	}
+	clientTLSCreds, err := NewClientCreds(clientOptions)
+	if err != nil {
+		t.Fatalf("clientTLSCreds failed to create, error: %v", err)
+	}
+	// At initialization, the connection should be good.
+	ctx, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	defer cancel()
+	conn, greetClient, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 1", clientTLSCreds, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	err = copyFileContents(testdata.Path("spiffe/server_spiffe.pem"), tmpFiles.clientSPIFFECertTmp.Name())
+	if err != nil {
+		t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("spiffe/server_spiffe.pem"), tmpFiles.clientSPIFFECertTmp.Name(), err)
+	}
+	// pick up the change.
+	time.Sleep(sleepInterval)
+	// The already-established connection should not be affected.
+	err = callAndVerify(ctx, "rpc call 2", greetClient, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Make the identity key change, and wait 1 second for the provider to
+	// pick up the change.
+	err = copyFileContents(testdata.Path("spiffe/server.key"), tmpFiles.clientSPIFFEKeyTmp.Name())
+	if err != nil {
+		t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("spiffe/server.key"), tmpFiles.clientSPIFFEKeyTmp.Name(), err)
+	}
+	time.Sleep(sleepInterval)
+	// New connections should fail now, because the Provider picked the
+	// change, and *_cert_2.pem is not trusted by *_trust_cert_1.pem on the
+	// other side.
+	ctx2, cancel := context.WithTimeout(context.Background(), defaultTestTimeout)
+	conn3, _, err := callAndVerifyWithClientConn(ctx2, addr, "rpc call 4", clientTLSCreds, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn3.Close()
+	// Immediately cancel the context so the dialing won't drag the entire timeout still it stops.
+	cancel()
+
+	// Make the SPIFFE Bundle change - we swapped the client side to use the
+	// server cert and key, so if we swap the SPIFFE bundle on the server-side
+	// it should work the provider to pick up the change.
+	err = copyFileContents(testdata.Path("spiffe/client_spiffebundle.json"), tmpFiles.serverSPIFFEBundleTmp.Name())
+	if err != nil {
+		t.Fatalf("copyFileContents(%s, %s) failed: %v", testdata.Path("spiffe/client_spiffebundle.json"), tmpFiles.serverSPIFFEBundleTmp.Name(), err)
+	}
+	time.Sleep(sleepInterval)
+	// New connections should be good, because the other side is using an expected spiffe bundle and certs
+	conn4, _, err := callAndVerifyWithClientConn(ctx, addr, "rpc call 5", clientTLSCreds, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn4.Close()
 }
 
 func (s) TestDefaultHostNameCheck(t *testing.T) {

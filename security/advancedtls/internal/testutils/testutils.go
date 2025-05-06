@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"os"
 
+	"google.golang.org/grpc/internal/credentials/spiffe"
 	"google.golang.org/grpc/security/advancedtls/testdata"
 )
 
@@ -64,7 +65,12 @@ type CertStore struct {
 	// ServerTrust2 is the root certificate used on the server side.
 	ServerTrust2 *x509.CertPool
 	// ServerTrust2 is the root certificate used on the server side.
-	ServerTrust3 *x509.CertPool
+	ServerTrust3       *x509.CertPool
+	ClientSPIFFEBundle spiffe.SPIFFEBundleMap
+	ServerSPIFFEBundle spiffe.SPIFFEBundleMap
+	ClientSPIFFECert   tls.Certificate
+	ClientSPIFFERoot   *x509.CertPool
+	ServerSPIFFECert   tls.Certificate
 }
 
 func readTrustCert(fileName string) (*x509.CertPool, error) {
@@ -123,6 +129,18 @@ func (cs *CertStore) LoadCerts() error {
 		return err
 	}
 	if cs.ServerTrust3, err = readTrustCert(testdata.Path("crl/provider_server_trust_cert.pem")); err != nil {
+		return err
+	}
+	if cs.ClientSPIFFECert, err = tls.LoadX509KeyPair(testdata.Path("spiffe/client_spiffe.pem"), testdata.Path("spiffe/client.key")); err != nil {
+		return err
+	}
+	if cs.ServerSPIFFECert, err = tls.LoadX509KeyPair(testdata.Path("spiffe/server_spiffe.pem"), testdata.Path("spiffe/server.key")); err != nil {
+		return err
+	}
+	if cs.ClientSPIFFEBundle, err = spiffe.LoadSPIFFEBundleMap(testdata.Path("spiffe/client_spiffebundle.json")); err != nil {
+		return err
+	}
+	if cs.ServerSPIFFEBundle, err = spiffe.LoadSPIFFEBundleMap(testdata.Path("spiffe/server_spiffebundle.json")); err != nil {
 		return err
 	}
 	return nil

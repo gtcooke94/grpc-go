@@ -87,6 +87,31 @@ func (f fakeProvider) KeyMaterial(context.Context) (*certprovider.KeyMaterial, e
 
 func (f fakeProvider) Close() {}
 
+type fakeProviderSPIFFE struct {
+	pt        provType
+	isClient  bool
+	wantError bool
+}
+
+func (f fakeProviderSPIFFE) KeyMaterial(context.Context) (*certprovider.KeyMaterial, error) {
+	cs := &testutils.CertStore{}
+	if err := cs.LoadCerts(); err != nil {
+		return nil, fmt.Errorf("cs.LoadCerts() failed, err: %v", err)
+	}
+	if f.pt == provTypeRoot && f.isClient {
+		return &certprovider.KeyMaterial{SPIFFEBundleMap: cs.ClientSPIFFEBundle}, nil
+	}
+	if f.pt == provTypeRoot && !f.isClient {
+		return &certprovider.KeyMaterial{SPIFFEBundleMap: cs.ServerSPIFFEBundle}, nil
+	}
+	if f.pt == provTypeIdentity && f.isClient {
+		return &certprovider.KeyMaterial{Certs: []tls.Certificate{cs.ClientSPIFFECert}}, nil
+	}
+	return &certprovider.KeyMaterial{Certs: []tls.Certificate{cs.ServerSPIFFECert}}, nil
+}
+
+func (f fakeProviderSPIFFE) Close() {}
+
 func (s) TestClientOptionsConfigErrorCases(t *testing.T) {
 	tests := []struct {
 		desc                   string
@@ -400,7 +425,8 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			return nil, errors.New("client side server name should have a value")
 		}
 		// "foo.bar.com" is the common name on server certificate server_cert_1.pem.
-		if len(params.VerifiedChains) > 0 && (params.Leaf == nil || params.Leaf.Subject.CommonName != "foo.bar.com") {
+		// "*.test.google.com" is the common name on server certificate server_spiffe.pem
+		if len(params.VerifiedChains) > 0 && (params.Leaf == nil || !(params.Leaf.Subject.CommonName == "foo.bar.com" || params.Leaf.Subject.CommonName == "*.test.google.com")) {
 			return nil, errors.New("client side params parsing error")
 		}
 
@@ -752,6 +778,20 @@ func (s) TestClientServerHandshake(t *testing.T) {
 			serverRootProvider:     fakeProvider{isClient: false},
 			serverVerificationType: CertVerification,
 		},
+		// Client: set clientIdentityProvider and clientRootProvider to use SPIFFE Bundles for roots and associated identity certs.
+		// Server: set serverIdentityProvider and serverRootProvider to use SPIFFE Bundles for roots and associated identity certs.
+		// Expected Behavior: success
+		{
+			desc:                   "Client SPIFFE and Server SPIFFE",
+			clientIdentityProvider: fakeProviderSPIFFE{pt: provTypeIdentity, isClient: true},
+			clientRootProvider:     fakeProviderSPIFFE{isClient: true},
+			clientVerifyFunc:       clientVerifyFuncGood,
+			clientVerificationType: CertVerification,
+			serverMutualTLS:        true,
+			serverIdentityProvider: fakeProviderSPIFFE{pt: provTypeIdentity, isClient: false},
+			serverRootProvider:     fakeProviderSPIFFE{isClient: false},
+			serverVerificationType: CertVerification,
+		},
 		// Client: set valid credentials with the revocation config
 		// Server: set valid credentials with the revocation config
 		// Expected Behavior: success, because none of the certificate chains sent in the connection are revoked
@@ -839,6 +879,7 @@ func (s) TestClientServerHandshake(t *testing.T) {
 				}
 				_, serverAuthInfo, err := serverTLS.ServerHandshake(serverRawConn)
 				if err != nil {
+					fmt.Printf("%v", err)
 					serverRawConn.Close()
 					close(done)
 					return
@@ -922,7 +963,14 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					serverRoot = result.TrustCerts
 				} else if test.serverRootProvider != nil {
 					km, _ := test.serverRootProvider.KeyMaterial(ctx)
-					serverRoot = km.Roots
+					if km.SPIFFEBundleMap != nil {
+						rootPool := x509.NewCertPool()
+						// Known hardcoded values for the test SPIFFE Bundle Map
+						rootPool.AddCert(km.SPIFFEBundleMap["foo.bar.com"].X509Authorities()[0])
+						serverRoot = rootPool
+					} else {
+						serverRoot = km.Roots
+					}
 				}
 				serverVerifiedChainsCp := x509.NewCertPool()
 				serverVerifiedChainsCp.AddCert(serverVerifiedChains[0][len(serverVerifiedChains[0])-1])
@@ -957,7 +1005,14 @@ func (s) TestClientServerHandshake(t *testing.T) {
 					clientRoot = result.TrustCerts
 				} else if test.clientRootProvider != nil {
 					km, _ := test.clientRootProvider.KeyMaterial(ctx)
-					clientRoot = km.Roots
+					if km.SPIFFEBundleMap != nil {
+						rootPool := x509.NewCertPool()
+						// Known hardcoded values for the test SPIFFE Bundle Map
+						rootPool.AddCert(km.SPIFFEBundleMap["example.com"].X509Authorities()[0])
+						clientRoot = rootPool
+					} else {
+						clientRoot = km.Roots
+					}
 				}
 				clientVerifiedChainsCp := x509.NewCertPool()
 				clientVerifiedChainsCp.AddCert(clientVerifiedChains[0][len(clientVerifiedChains[0])-1])

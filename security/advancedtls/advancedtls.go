@@ -39,6 +39,7 @@ import (
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/tls/certprovider"
 	credinternal "google.golang.org/grpc/internal/credentials"
+	"google.golang.org/grpc/internal/credentials/spiffe"
 )
 
 // CertificateChains represents a slice of certificate chains, each consisting
@@ -272,12 +273,16 @@ func (o *Options) clientConfig() (*tls.Config, error) {
 		// callback is not contained in tls.Config, we have nothing to set here.
 		// We will invoke the callback in ClientHandshake.
 	case o.RootOptions.RootProvider != nil:
-		o.RootOptions.GetRootCertificates = func(*ConnectionInfo) (*RootCertificates, error) {
+		o.RootOptions.GetRootCertificates = func(connectionInfo *ConnectionInfo) (*RootCertificates, error) {
 			km, err := o.RootOptions.RootProvider.KeyMaterial(context.Background())
 			if err != nil {
 				return nil, err
 			}
-			return &RootCertificates{TrustCerts: km.Roots}, nil
+			if km.SPIFFEBundleMap != nil {
+				return getRootsFromSPIFFEBundleMap(connectionInfo, km.SPIFFEBundleMap)
+			} else {
+				return &RootCertificates{TrustCerts: km.Roots}, nil
+			}
 		}
 	default:
 		// No root certificate options specified by user. Use the certificates
@@ -361,12 +366,16 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 		// callback is not contained in tls.Config, we have nothing to set here.
 		// We will invoke the callback in ServerHandshake.
 	case o.RootOptions.RootProvider != nil:
-		o.RootOptions.GetRootCertificates = func(*ConnectionInfo) (*RootCertificates, error) {
+		o.RootOptions.GetRootCertificates = func(connectionInfo *ConnectionInfo) (*RootCertificates, error) {
 			km, err := o.RootOptions.RootProvider.KeyMaterial(context.Background())
 			if err != nil {
 				return nil, err
 			}
-			return &RootCertificates{TrustCerts: km.Roots}, nil
+			if km.SPIFFEBundleMap != nil {
+				return getRootsFromSPIFFEBundleMap(connectionInfo, km.SPIFFEBundleMap)
+			} else {
+				return &RootCertificates{TrustCerts: km.Roots}, nil
+			}
 		}
 	default:
 		// No root certificate options specified by user. Use the certificates
@@ -406,6 +415,38 @@ func (o *Options) serverConfig() (*tls.Config, error) {
 		return nil, fmt.Errorf("needs to specify at least one field in IdentityCertificateOptions")
 	}
 	return config, nil
+}
+
+func getRootsFromSPIFFEBundleMap(connectionInfo *ConnectionInfo, bundleMap spiffe.SPIFFEBundleMap) (*RootCertificates, error) {
+	if len(connectionInfo.RawCerts) == 0 {
+		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() had empty connectionInfo.RawCerts. Need certificate chain to lookup roots")
+	}
+	leafCert, err := x509.ParseCertificate(connectionInfo.RawCerts[0])
+	if err != nil {
+		return nil, err
+
+	}
+	// 1. Upon receiving a peer certificate, verify that it is a well-formed SPIFFE
+	//    leaf certificate.  In particular, it must have a single URI SAN containing
+	//    a well-formed SPIFFE ID ([SPIFFE ID format]).
+	spiffeId := credinternal.SPIFFEIDFromCert(leafCert)
+	if spiffeId == nil {
+		return nil, fmt.Errorf("credinternal.SPIFFEIDFromCert(leafCert) = nil, failed to parse a SPIFFE id")
+	}
+
+	// 2. Use the trust domain in the peer certificate's SPIFFE ID to lookup
+	//    the SPIFFE trust bundle. If the trust domain is not contained in the
+	//    configured trust map, reject the certificate.
+	spiffeBundle, ok := bundleMap[spiffeId.Host]
+	if !ok {
+		return nil, fmt.Errorf("getRootsFromSPIFFEBundleMap() failed. No bundle found for peer certificates trust domain %v", spiffeId.Host)
+	}
+	roots := spiffeBundle.X509Authorities()
+	rootPool := x509.NewCertPool()
+	for _, root := range roots {
+		rootPool.AddCert(root)
+	}
+	return &RootCertificates{TrustCerts: rootPool}, err
 }
 
 // advancedTLSCreds is the credentials required for authenticating a connection
